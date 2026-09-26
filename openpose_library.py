@@ -1,12 +1,12 @@
 """OpenPose skeleton galleries for the free-pose editor.
 
 Built-in: the plugin's FISHER小彩蛋 folder (read-only).
-User library: images uploaded through ComfyUI's own /upload/image into input/fisher_openpose,
+User library: images uploaded through ComfyUI's own /upload/image into input/fisher_pose_3d/openpose,
 so they survive restarts and browsers; these routes only list and clear that folder.
 """
 import os
 
-LIBRARY_SUBFOLDER = "fisher_openpose"
+LIBRARY_SUBFOLDER = "fisher_pose_3d/openpose"
 IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".webp")
 # Built-in skeletons shipped with the plugin, named 1.png, 2.png, ...
 BUILTIN_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "FISHER小彩蛋")
@@ -49,19 +49,19 @@ def register_routes():
     except (ImportError, AttributeError):  # unit tests import the package without a running server
         return
 
-    @routes.get("/fisher_pose/openpose_library")
+    @routes.get("/fisher_pose_3d/openpose_library")
     async def get_library(request):
         return web.json_response({"subfolder": LIBRARY_SUBFOLDER, "files": list_library(folder_paths.get_input_directory())})
 
-    @routes.post("/fisher_pose/openpose_library/clear")
+    @routes.post("/fisher_pose_3d/openpose_library/clear")
     async def post_clear(request):
         return web.json_response({"removed": clear_library(folder_paths.get_input_directory())})
 
-    @routes.get("/fisher_pose/builtin_poses")
+    @routes.get("/fisher_pose_3d/builtin_poses")
     async def get_builtin(request):
         return web.json_response({"files": list_builtin()})
 
-    @routes.get("/fisher_pose/builtin_poses/{name}")
+    @routes.get("/fisher_pose_3d/builtin_poses/{name}")
     async def get_builtin_file(request):
         name = request.match_info["name"]
         if name not in list_builtin():  # only listed files, never arbitrary paths

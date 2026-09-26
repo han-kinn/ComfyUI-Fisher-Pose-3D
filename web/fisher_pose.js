@@ -2,12 +2,12 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const EDITORS = {
-    studio: { url: new URL("./editor/studio.html", import.meta.url), version: "20260922-preview2", title: "Fisher 机位与姿态编辑器",
+    studio: { url: new URL("./editor/studio.html", import.meta.url), version: "20260926-gallery6", title: "Fisher 3D 机位与姿态编辑器",
               fields: ["scene_json", "output_mode", "width", "height", "extra_prompt"], data: "scene_json", image: "reference_image_1" },
-    freePose: { url: new URL("./editor/freepose.html", import.meta.url), version: "20260924-6", title: "Fisher 自由姿势编辑器",
+    freePose: { url: new URL("./editor/freepose.html", import.meta.url), version: "20260926-gallery6", title: "Fisher Pose 3D 自由姿势编辑器",
                 fields: ["pose_json", "extra_prompt"], data: "pose_json", image: "reference_image" },
 };
-const editorFor = node => (node.comfyClass || node.type) === "FisherQwenFreePose" ? EDITORS.freePose : EDITORS.studio;
+const editorFor = node => (node.comfyClass || node.type) === "Fisher3DQwenFreePose" ? EDITORS.freePose : EDITORS.studio;
 const widget = (node, name) => node.widgets.find(item => item.name === name);
 let activeEditor = null;
 
@@ -38,8 +38,9 @@ async function showPoseImage(node) {
     let hash = 2166136261;
     for (let i = 0; i < reference.length; i += 7) hash = Math.imul(hash ^ reference.charCodeAt(i), 16777619);
     const form = new FormData();
-    form.append("image", await (await fetch(reference)).blob(), `fisher_freepose_${(hash >>> 0).toString(16)}.png`);
+    form.append("image", await (await fetch(reference)).blob(), `fisher_3d_freepose_${(hash >>> 0).toString(16)}.png`);
     form.append("type", "temp");
+    form.append("subfolder", "fisher_pose_3d");
     form.append("overwrite", "true");
     const response = await api.fetchApi("/upload/image", { method: "POST", body: form });
     if (!response.ok) return;
@@ -67,7 +68,7 @@ function openEditor(node) {
     referencePicker.hidden = true;
     referencePicker.addEventListener("click", event => event.stopPropagation());
     // Keep the picker inside the active modal, invoked synchronously by the user click.
-    frame.fisherChooseReference = onFile => {
+    frame.fisher3DChooseReference = onFile => {
         referencePicker.value = "";
         referencePicker.onchange = () => {
             const file = referencePicker.files[0];
@@ -76,14 +77,15 @@ function openEditor(node) {
         referencePicker.click();
     };
     // Multi-file / folder variant for the free-pose OpenPose gallery.
-    frame.fisherChooseFiles = (onFiles, { directory = false } = {}) => {
+    frame.fisher3DChooseFiles = (onFiles, { directory = false, accept = "image/*", onCancel } = {}) => {
         const picker = document.createElement("input");
         picker.type = "file";
-        picker.accept = "image/*";
+        picker.accept = accept;
         picker.multiple = true;
         picker.webkitdirectory = directory;
         picker.hidden = true;
         picker.addEventListener("click", event => event.stopPropagation());
+        picker.addEventListener("cancel", event => { event.stopPropagation(); picker.remove(); onCancel?.(); });
         picker.onchange = () => { if (picker.files.length) onFiles([...picker.files]); picker.remove(); };
         overlay.append(picker);
         picker.click();
@@ -99,11 +101,11 @@ function openEditor(node) {
     }
     function receive(event) {
         if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
-        if (event.data?.type === "fisher-ready") {
+        if (event.data?.type === "fisher-3d-ready") {
             const payload = Object.fromEntries(
                 editor.fields.map(name => [name, widget(node, name).value])
             );
-            if (node.comfyClass === "FisherQwenPose" || node.type === "FisherQwenPose") {
+            if (node.comfyClass === "Fisher3DQwenPose" || node.type === "Fisher3DQwenPose") {
                 payload.qwenBinding = {
                     peEnabled: node.inputs?.find(input => input.name === "pe_clip")?.link != null,
                     count: [1, 2, 3].filter(i => node.inputs?.find(input => input.name === `reference_image_${i}`)?.link != null).length,
@@ -111,10 +113,10 @@ function openEditor(node) {
                 };
             }
             payload.referencePreview=upstreamPreview(node,editor.image);
-            frame.contentWindow.postMessage({ type: "fisher-load", payload }, location.origin);
+            frame.contentWindow.postMessage({ type: "fisher-3d-load", payload }, location.origin);
         }
-        if (event.data?.type === "fisher-close") close();
-        if (event.data?.type === "fisher-apply") {
+        if (event.data?.type === "fisher-3d-close") close();
+        if (event.data?.type === "fisher-3d-apply") {
             const payload = event.data.payload;
             if (!payload || typeof payload[editor.data] !== "string") return;
             for (const name of editor.fields) {
@@ -129,35 +131,59 @@ function openEditor(node) {
         }
     }
     window.addEventListener("message", receive);
-    overlay.addEventListener("cancel", event => { event.preventDefault(); close(); });
+    overlay.addEventListener("cancel", event => { if (event.target !== overlay) return; event.preventDefault(); close(); });
     document.body.append(overlay);
     overlay.showModal();
     activeEditor = close;
 }
 
+const EDITABLE_NODE_IDS = new Set(["Fisher3DPoseStudio", "Fisher3DQwenPose", "Fisher3DQwenFreePose"]);
+const editorButton = Symbol("fisher3DEditorButton");
+
+function ensureEditorButton(node, name) {
+    if (!EDITABLE_NODE_IDS.has(name)) return;
+    const freePose = name === "Fisher3DQwenFreePose";
+    const scene = node.widgets?.find(item => item.name === (freePose ? "pose_json" : "scene_json"));
+    // Some frontend versions construct serialized widgets after onNodeCreated.
+    if (scene) {
+        // Use ComfyUI's visibility flag so DOM layout and hit testing agree.
+        // Changing type/computeSize alone leaves a live DOM widget in the canvas.
+        scene.hidden = true;
+        if (scene.element) {
+            scene.element.style.display = "none";
+            scene.element.style.pointerEvents = "none";
+        }
+    }
+    if (node.widgets?.includes(node[editorButton])) return;
+    node[editorButton] = node.addWidget("button", freePose ? "打开自由姿势编辑器" : "打开机位与姿态编辑器", null,
+        () => openEditor(node), { serialize: false });
+    node.setDirtyCanvas?.(true, true);
+}
+
 app.registerExtension({
-    name: "Fisher.PoseStudio",
+    name: "Fisher3D.PoseStudio",
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (!["FisherPoseStudio", "FisherQwenPose", "FisherQwenFreePose"].includes(nodeData.name)) return;
-        const freePose = nodeData.name === "FisherQwenFreePose";
+        if (!EDITABLE_NODE_IDS.has(nodeData.name)) return;
+        const freePose = nodeData.name === "Fisher3DQwenFreePose";
         const original = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {
             const result = original?.apply(this, arguments);
-            const scene = widget(this, freePose ? "pose_json" : "scene_json");
-            scene.type = "fisher_hidden";
-            scene.computeSize = () => [0, -4];
-            if (scene.element) scene.element.style.display = "none";
-            this.addWidget("button", freePose ? "打开自由姿势编辑器" : "打开机位与姿态编辑器", null, () => openEditor(this), { serialize: false });
-            this.size = freePose ? [380, 300] : nodeData.name === "FisherQwenPose" ? [420, 470] : [350, 290];
+            ensureEditorButton(this, nodeData.name);
+            this.size = freePose ? [380, 300] : nodeData.name === "Fisher3DQwenPose" ? [420, 470] : [350, 290];
             return result;
         };
-        if (!freePose) return;
-        // Workflows saved with a pose show it again on load; outputs are reset while loading, so wait a tick.
         const configure = nodeType.prototype.onConfigure;
         nodeType.prototype.onConfigure = function () {
             const result = configure?.apply(this, arguments);
-            setTimeout(() => void showPoseImage(this).catch(() => {}), 600);
+            ensureEditorButton(this, nodeData.name);
+            if (freePose) setTimeout(() => void showPoseImage(this).catch(() => {}), 600);
             return result;
         };
+    },
+    nodeCreated(node) {
+        ensureEditorButton(node, node.comfyClass || node.type);
+    },
+    loadedGraphNode(node) {
+        ensureEditorButton(node, node.comfyClass || node.type);
     },
 });

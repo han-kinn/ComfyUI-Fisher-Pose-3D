@@ -6,7 +6,7 @@
   "nodes": [
     {
       "id": 1,
-      "type": "FisherPoseStudio",
+      "type": "Fisher3DPoseStudio",
       "pos": [
         100,
         200
@@ -34,7 +34,7 @@
         }
       ],
       "properties": {
-        "Node name for S&R": "FisherPoseStudio",
+        "Node name for S&R": "Fisher3DPoseStudio",
         "Fisher使用说明": "输出拍摄框内人偶画面。首次使用请打开编辑器并应用到节点，保存当前裁切。"
       },
       "widgets_values": [
@@ -43,7 +43,8 @@
         1024,
         "",
         "{}"
-      ]
+      ],
+      "title": "Fisher 机位与姿态（3D）"
     },
     {
       "id": 2,

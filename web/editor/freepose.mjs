@@ -1,3 +1,4 @@
+import { retargetDuf } from './duf-import.mjs?v=20260926-gallery6';
 // Free-pose editor: one VNCCS MakeHuman mannequin. Editing uses a free orbit view;
 // the output is always the VNCCS front capture (yaw 0 / pitch 0, white background,
 // flat white ambient light), which is what the VNCCS_QI2_PoseStudio LoRA was trained on.
@@ -67,10 +68,12 @@ const viewer = new PoseViewerCore(canvas, {
     showCaptureFrame: true,
     syncMode: 'end',
     useHandControlPopover: false,
-    captureHistoryContext: () => ({ transform: { ...doc.transform } }),
+    captureHistoryContext: () => ({ transform: { ...doc.transform }, openpose: doc.openpose }),
     onHistoryRestore: pose => {
         if (pose.editorState) {
             doc.transform = { ...pose.editorState.transform };
+            doc.openpose = pose.editorState.openpose || null;
+            refreshFlips();
             viewer.setActiveCharacterAppearance({ transform: doc.transform });
             updateCamera(false);
         }
@@ -263,10 +266,10 @@ for (const button of document.querySelectorAll('[data-flip]')) {
 }
 
 // Two sources: the plugin's built-in FISHER小彩蛋 skeletons (read-only) and the user's
-// library in input/fisher_openpose (see openpose_library.py), which survives reopening
+// library in input/fisher_pose_3d/openpose (see openpose_library.py), which survives reopening
 // the editor. Standalone (no ComfyUI server) the library only lasts for this page.
-const LIBRARY_URL = '/fisher_pose/openpose_library';
-const BUILTIN_URL = '/fisher_pose/builtin_poses';
+const LIBRARY_URL = '/fisher_pose_3d/openpose_library';
+const BUILTIN_URL = '/fisher_pose_3d/builtin_poses';
 const SOURCE_NAMES = { builtin: 'FISHER小彩蛋', library: '我的图库' };
 const galleries = { builtin: [], library: [] };
 let gallerySource = 'builtin';
@@ -291,19 +294,19 @@ function renderGallery() {
         return button;
     }));
     for (const button of document.querySelectorAll('#gallery-source button')) {
-        button.classList.toggle('active', button.dataset.source === gallerySource);
+        button.classList.toggle('active', button.dataset.source === gallerySource && $('#duf-library').hidden);
         button.textContent = `${SOURCE_NAMES[button.dataset.source]} ${galleries[button.dataset.source].length || ''}`.trim();
     }
     $('#gallery-count').textContent = gallery.length && filter ? `${shown.length} / ${gallery.length}` : '';
     $('#gallery-filter').hidden = gallery.length < 2;
-    $('#clear-gallery').hidden = gallerySource !== 'library' || !libraryAvailable || !gallery.length;
+    $('#clear-gallery').hidden = !$('#duf-library').hidden || gallerySource !== 'library' || !libraryAvailable || !gallery.length;
     if (!gallery.length) container.innerHTML = gallerySource === 'builtin'
         ? '<p class="muted">内置骨架图需要在 ComfyUI 中打开编辑器才能读取。</p>'
         : '<p class="muted">选 OpenPose 骨架图（黑底彩色），点缩略图即摆好姿势。也可把图片拖到这里。选过的图会存入图库，下次打开自动载入。</p>';
 }
 
 for (const button of document.querySelectorAll('#gallery-source button')) {
-    button.onclick = () => { gallerySource = button.dataset.source; renderGallery(); };
+    button.onclick = () => { gallerySource = button.dataset.source; showDufPanel(false); renderGallery(); };
 }
 
 async function loadBuiltin() {
@@ -335,7 +338,7 @@ async function uploadToLibrary(images) {
         for (let file = queue.shift(); file; file = queue.shift()) {
             const form = new FormData();
             form.append('image', file, file.name);
-            form.append('subfolder', 'fisher_openpose');
+            form.append('subfolder', 'fisher_pose_3d/openpose');
             form.append('type', 'input');
             form.append('overwrite', 'true');
             try { if (!(await fetch('/upload/image', { method: 'POST', body: form })).ok) failed++; }
@@ -361,7 +364,7 @@ async function addFiles(files) {
 }
 
 $('#clear-gallery').onclick = async () => {
-    if (!libraryAvailable || !confirm(`清空我的图库中的 ${galleries.library.length} 张骨架图？\n（删除 ComfyUI/input/fisher_openpose 里的副本，原文件夹和 FISHER小彩蛋 不受影响）`)) return;
+    if (!libraryAvailable || !confirm(`清空我的图库中的 ${galleries.library.length} 张骨架图？\n（删除 ComfyUI/input/fisher_pose_3d/openpose 里的副本，原文件夹和 FISHER小彩蛋 不受影响）`)) return;
     await fetch(LIBRARY_URL + '/clear', { method: 'POST' });
     await loadLibrary();
     toast('我的图库已清空');
@@ -372,7 +375,7 @@ for (const id of ['#pick-folder', '#pick-files']) {
     input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
     // Inside the ComfyUI modal, let the host page open the picker (same as the studio editor).
     input.addEventListener('click', event => {
-        const chooseInHost = window.frameElement?.fisherChooseFiles;
+        const chooseInHost = window.frameElement?.fisher3DChooseFiles;
         if (!chooseInHost) return;
         event.preventDefault();
         try { chooseInHost(addFiles, { directory: id === '#pick-folder' }); }
@@ -384,6 +387,119 @@ const galleryBox = $('#gallery');
 galleryBox.addEventListener('dragover', event => { event.preventDefault(); galleryBox.classList.add('drag'); });
 galleryBox.addEventListener('dragleave', () => galleryBox.classList.remove('drag'));
 galleryBox.addEventListener('drop', event => { event.preventDefault(); galleryBox.classList.remove('drag'); addFiles(event.dataTransfer.files); });
+
+// --- DAZ 3D import and persistent gallery -----------------------------------
+const DUF_URL = '/fisher_pose_3d/duf';
+let dufEntries = [], dufBusy = false, activeDuf = null;
+async function dufRequest(path = '', options = {}) {
+    const response = await fetch(DUF_URL + path, { cache: 'no-store', ...options });
+    let result;
+    try { result = await response.json(); } catch { throw new Error('3D图库服务不可用，请重启 ComfyUI 后打开编辑器'); }
+    if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
+    return result;
+}
+function renderDufGallery() {
+    const filter = $('#duf-filter').value.trim().toLowerCase();
+    const box = $('#duf-gallery'); box.replaceChildren();
+    $('#duf-count').textContent = `${dufEntries.length} 个`;
+    for (const entry of dufEntries.filter(e => e.name.toLowerCase().includes(filter))) {
+        const card = document.createElement('div'); card.className = 'fp-duf-card';
+        const button = document.createElement('button');
+        button.className = 'fp-thumb' + (activeDuf === entry.id ? ' active' : '');
+        button.title = `应用 ${entry.name}`; button.setAttribute('aria-label', `应用 ${entry.name}`); button.disabled = dufBusy;
+        const image = document.createElement('img'); image.alt = entry.name; image.loading = 'lazy';
+        if (entry.thumbnail) image.src = entry.thumbnail;
+        else { image.alt = '点击生成姿势预览'; }
+        const label = document.createElement('span'); label.textContent = entry.name;
+        button.append(image, label); button.onclick = () => useDufEntry(entry.id);
+        const remove = document.createElement('button'); remove.className = 'fp-duf-delete';
+        remove.textContent = '删除'; remove.title = `从3D图库删除 ${entry.name}`; remove.disabled = dufBusy;
+        remove.onclick = async () => {
+            if (dufBusy || !confirm(`从3D图库删除「${entry.name}」？原始 DUF 文件不受影响。`)) return;
+            try { await dufRequest('/' + entry.id, { method: 'DELETE' }); await loadDufLibrary(); }
+            catch (error) { $('#duf-status').textContent = error.message; }
+        };
+        card.append(button, remove); box.append(card);
+    }
+    if (!box.childElementCount) { const text = document.createElement('p'); text.className = 'muted'; text.textContent = dufEntries.length ? '没有匹配的文件' : '导入 DUF 后会自动保存到这里，点击缩略图应用姿势。'; box.append(text); }
+}
+async function loadDufLibrary() {
+    dufEntries = (await dufRequest()).files; renderDufGallery();
+}
+async function applyDuf(entry) {
+    const converted = retargetDuf(entry.pose, viewer);
+    viewer.recordState();
+    doc.openpose = null; refreshFlips();
+    viewer.setPose(converted.pose, true);
+    applyNeck(); viewer.updateIKEffectorPositions?.();
+    fitFrame(true); refreshControls(); schedulePreview();
+    activeDuf = entry.id;
+    $('#duf-status').textContent = `已应用「${entry.name}」：${converted.count} 个骨骼。${converted.warning}。`;
+    await viewer.waitForCaptureReady();
+    const thumbnail = capture(256, 256);
+    updateCamera(false);
+    if (thumbnail) {
+        try { await dufRequest('/' + entry.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thumbnail }) }); }
+        catch (error) { $('#duf-status').textContent += ` 缩略图保存失败：${error.message}`; }
+    }
+}
+function setDufBusy(value) {
+    dufBusy = value; $('#pick-duf').disabled = value; $('#import-duf').disabled = value;
+    renderDufGallery();
+}
+async function useDufEntry(id) {
+    if (!ready || dufBusy) return;
+    setDufBusy(true);
+    try { await applyDuf(await dufRequest('/' + id)); await loadDufLibrary(); }
+    catch (error) { $('#duf-status').textContent = error.message; }
+    finally { setDufBusy(false); }
+}
+async function importDufFiles(files) {
+    if (!ready || dufBusy) { toast('请等待人偶或导入完成'); return; }
+    const selected = [...files].filter(f => /\.duf$/i.test(f.name));
+    if (!selected.length) { toast('请选择 .duf 姿势文件'); return; }
+    setDufBusy(true);
+    showDufPanel(true);
+    const errors = [];
+    for (const [index, file] of selected.entries()) {
+        $('#duf-status').textContent = `正在导入 ${index + 1}/${selected.length}：${file.name}`;
+        try {
+            if (file.size > 16 * 1024 * 1024) throw new Error('文件超过 16MB');
+            const form = new FormData(); form.append('file', file, file.name);
+            await applyDuf(await dufRequest('', { method: 'POST', body: form }));
+        } catch (error) { errors.push(`${file.name}：${error.message}`); }
+    }
+    try { await loadDufLibrary(); } catch (error) { errors.push(error.message); }
+    setDufBusy(false);
+    if (errors.length) $('#duf-status').textContent = errors.join('；');
+}
+$('#pick-duf').onchange = event => { importDufFiles(event.target.files); event.target.value = ''; };
+function showDufPanel(visible) {
+    $('#duf-library').hidden = !visible;
+    $('#openpose-library').hidden = visible;
+    $('#duf-status').hidden = !visible;
+    $('#gallery-count').hidden = visible;
+    $('#clear-gallery').hidden = visible || gallerySource !== 'library' || !libraryAvailable || !galleries.library.length;
+    $('#import-duf').classList.remove('active');
+    $('#show-duf-gallery').classList.toggle('active', visible);
+    $('#show-duf-gallery').setAttribute('aria-expanded', String(visible));
+    for (const button of document.querySelectorAll('#gallery-source button')) button.classList.toggle('active', !visible && button.dataset.source === gallerySource && $('#duf-library').hidden);
+}
+$('#import-duf').onclick = () => {
+    if (!ready || dufBusy) { toast('请等待人偶加载或导入完成'); return; }
+    showDufPanel(true);
+    $('#import-duf').classList.add('active');
+    $('#show-duf-gallery').classList.remove('active');
+    const choose = window.frameElement?.fisher3DChooseFiles;
+    if (choose) choose(importDufFiles, { accept: '.duf', onCancel: () => showDufPanel(true) });
+    else $('#pick-duf').click();
+};
+$('#pick-duf').addEventListener('cancel', () => showDufPanel(true));
+$('#show-duf-gallery').onclick = async () => {
+    showDufPanel(true);
+    try { await loadDufLibrary(); } catch (error) { $('#duf-status').textContent = error.message; }
+};
+$('#duf-filter').oninput = renderDufGallery;
 
 // --- Viewport interaction: our editor's feel on top of the VNCCS core -------
 
@@ -628,16 +744,16 @@ async function start(payload) {
 }
 
 window.addEventListener('message', event => {
-    if (event.source !== parent || event.origin !== location.origin || event.data?.type !== 'fisher-load') return;
+    if (event.source !== parent || event.origin !== location.origin || event.data?.type !== 'fisher-3d-load') return;
     if (pack) start(event.data.payload).catch(showError);
     else pendingPayload = event.data.payload;
 });
-$('#cancel-editor').onclick = () => parent.postMessage({ type: 'fisher-close' }, location.origin);
+$('#cancel-editor').onclick = () => parent.postMessage({ type: 'fisher-3d-close' }, location.origin);
 $('#apply-editor').onclick = async () => {
     $('#apply-editor').disabled = true;
     try {
         const pose_json = await serialize();
-        parent.postMessage({ type: 'fisher-apply', payload: { pose_json, extra_prompt: extraPrompt } }, location.origin);
+        parent.postMessage({ type: 'fisher-3d-apply', payload: { pose_json, extra_prompt: extraPrompt } }, location.origin);
     } catch (error) { showError(error); }
     finally { $('#apply-editor').disabled = false; }
 };
@@ -649,7 +765,7 @@ function showError(error) {
 }
 
 if (!embedded) { $('#apply-editor').hidden = true; $('#cancel-editor').hidden = true; }
-window.freePose = { viewer, get doc() { return doc; }, serialize, prompt: promptText, fitFrame, importEntry, addFiles };
+window.freePose = { importDufFiles, useDufEntry, viewer, get doc() { return doc; }, serialize, prompt: promptText, fitFrame, importEntry, addFiles };
 
 (async () => {
     await viewer.init();
@@ -657,7 +773,7 @@ window.freePose = { viewer, get doc() { return doc; }, serialize, prompt: prompt
     // The official QI2.1 workflow runs with the skydome disabled; it would otherwise be captured.
     viewer.setDirectionalSkydomeVisible(false);
     refreshControls();
-    if (embedded) parent.postMessage({ type: 'fisher-ready' }, location.origin);
+    if (embedded) parent.postMessage({ type: 'fisher-3d-ready' }, location.origin);
     pack = await loadMorphPack();
     if (embedded && !pendingPayload) return; // start() runs when the node payload arrives
     await start(pendingPayload);

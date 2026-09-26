@@ -93,7 +93,7 @@ class OpenPoseLibraryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             self.assertEqual(list_library(root), [])
             folder = Path(root) / LIBRARY_SUBFOLDER
-            folder.mkdir()
+            folder.mkdir(parents=True)
             for name in ('b.png', 'a.JPG', 'notes.txt'):
                 (folder / name).write_bytes(b'x')
             (Path(root) / 'outside.png').write_bytes(b'x')

@@ -34,7 +34,7 @@ export function setupReference(toast, onReferenceChange=()=>{}) {
     input.onchange=()=>{const file=input.files[0];input.value='';void load(file);};
     function chooseReference() {
         try {
-            const chooseInHost=window.frameElement?.fisherChooseReference;
+            const chooseInHost=window.frameElement?.fisher3DChooseReference;
             if(chooseInHost)chooseInHost(file=>void load(file));
             else input.click();
         } catch { toast('文件窗口未能打开，请拖入图片或 Ctrl+V 粘贴'); }

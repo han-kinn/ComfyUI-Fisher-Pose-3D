@@ -68,7 +68,7 @@ class FisherQwen21GGUFCLIP:
 
     RETURN_TYPES = ('CLIP',)
     FUNCTION = 'load_clip'
-    CATEGORY = 'Fisher/加载器'
+    CATEGORY = 'Fisher P3D/加载器'
 
     def load_clip(self, clip_name, vision_source):
         import nodes

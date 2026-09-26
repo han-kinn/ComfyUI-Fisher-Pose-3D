@@ -1,7 +1,7 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fisher Pose · 多人机位与姿态</title><link rel="icon" href="data:,"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="multi.css"></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fisher Pose 3D · 多人机位与姿态</title><link rel="icon" href="data:,"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="multi.css"></head>
 <body>
-<header class="appbar"><div class="brand"><span class="brand-icon">⌘</span><b>Fisher Pose</b><span class="divider"></span><span>多人机位与姿态</span><small>最多 3 人</small></div><div class="header-actions"><span id="save-status">编辑后应用到节点</span><button id="undo" title="撤销 Ctrl+Z">↶ 撤销</button><button id="redo" title="重做 Ctrl+Shift+Z">↷</button><button id="export-pose">导出人偶图</button><button id="cancel-editor">取消</button><button class="primary" id="apply-editor">应用到节点</button></div></header>
+<header class="appbar"><div class="brand"><span class="brand-icon">⌘</span><b>Fisher Pose 3D</b><span class="divider"></span><span>多人机位与姿态</span><small>最多 3 人</small></div><div class="header-actions"><span id="save-status">编辑后应用到节点</span><button id="undo" title="撤销 Ctrl+Z">↶ 撤销</button><button id="redo" title="重做 Ctrl+Shift+Z">↷</button><button id="export-pose">导出人偶图</button><button id="cancel-editor">取消</button><button class="primary" id="apply-editor">应用到节点</button></div></header>
 <main>
 <aside class="left-panel">
 <section><div class="section-heading"><h2>人物 <span id="person-count">1 / 3</span></h2><button class="text-button" id="add-person">＋ 添加</button></div><div id="people-list"></div><div class="person-actions"><button id="duplicate-person">复制人物</button><button id="delete-person">删除</button></div></section>
@@ -40,5 +40,5 @@
 <section class="description-section"><div class="section-heading"><h2>输出提示词</h2><button id="copy-description" class="text-button">复制</button></div><p id="description"></p><span class="description-note">与当前模式和机位同步</span></section>
 <div class="output-note"><i></i><span>提示词 → prompt<br>合成骨架图 → image_2，原图 → image_1</span></div>
 </aside></main>
-<footer class="app-footer"><span>Fisher Pose <span class="footer-dot">/</span> Multi-person Studio</span><span>编辑后应用到节点，再运行工作流</span></footer>
-<script type="module" src="studio.mjs?v=20260922-preview2"></script></body></html>
+<footer class="app-footer"><span>Fisher Pose 3D <span class="footer-dot">/</span> Multi-person Studio</span><span>编辑后应用到节点，再运行工作流</span></footer>
+<script type="module" src="studio.mjs?v=20260926-p3d3"></script></body></html>

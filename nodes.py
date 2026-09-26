@@ -20,7 +20,7 @@ class FisherPoseStudio:
     RETURN_TYPES = ("STRING", "IMAGE", "IMAGE")
     RETURN_NAMES = ("提示词", "人偶姿态图", "镜头预览图")
     FUNCTION = "generate"
-    CATEGORY = "Fisher/姿态与机位"
+    CATEGORY = "Fisher P3D/姿态与机位"
     DESCRIPTION = "支持 1–3 人独立摆姿、站位与共用机位。提示词接 prompt，拍摄框人偶姿态图接 image_2；原图直接接 image_1。仅视角时不连接姿态图输出。"
 
     def generate(self, output_mode, width, height, extra_prompt, scene_json):
@@ -32,4 +32,4 @@ class FisherPoseStudio:
         image = (reference_image(scene_json) if output_mode != "仅视角" else render_pose(state, 1536, 864))
         tensor = torch.from_numpy(np.asarray(image).astype(np.float32) / 255.0).unsqueeze(0)
         preview=torch.from_numpy(np.asarray(camera_preview(scene_json)).astype(np.float32)/255).unsqueeze(0)
-        return {"ui": {"fisher_prompt": [prompt]}, "result": (prompt, tensor, preview)}
+        return {"ui": {"fisher_3d_prompt": [prompt]}, "result": (prompt, tensor, preview)}

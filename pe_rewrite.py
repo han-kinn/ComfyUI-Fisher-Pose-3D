@@ -89,10 +89,10 @@ def rewrite(pe_clip, prompt, images, width, height, max_tokens=8192, required_fa
         digest.update(str((tuple(pixels.shape), str(pixels.dtype))).encode())
         digest.update(pixels.float().numpy().tobytes())
     key = digest.hexdigest()
-    cache = getattr(pe_clip, '_fisher_pe_cache', None)
+    cache = getattr(pe_clip, '_fisher_3d_pe_cache', None)
     if cache is None:
         cache = OrderedDict()
-        pe_clip._fisher_pe_cache = cache
+        pe_clip._fisher_3d_pe_cache = cache
     if key in cache:
         cache.move_to_end(key)
         print('[Fisher PE] 复用已完成的扩写结果')

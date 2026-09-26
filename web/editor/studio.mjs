@@ -1,5 +1,5 @@
 import {createSceneCube} from './scene-cube.mjs';
-import {renderMannequinReference} from './pose-reference.mjs?v=20260922-preview2';
+import {renderMannequinReference} from './pose-reference.mjs?v=20260926-coexist2';
 import {readSkeletonImage,fitSkeleton,fitSelectedSkeleton} from './pose-import.mjs';
 import {setupReference} from './reference.mjs';
 import * as THREE from './vendor/three.module.mjs';
@@ -9,7 +9,7 @@ import {createAvatar,normalizeLimbs,solveIK,boneLengths,moveBodyJoint} from './a
 const $=selector=>document.querySelector(selector),$$=selector=>[...document.querySelectorAll(selector)];
 const V=(...values)=>new THREE.Vector3(...values);
 const embedded=new URLSearchParams(location.search).has('embedded');
-const storageKey='fisher-pose-multi-v2';
+const storageKey='fisher-pose-3d-multi-v2';
 let state=migrate(),shots=[],history=[],future=[],selectedJoint=null,toastTimer;
 let outputMode='视角＋姿态',extraPrompt='';
 const avatars=new Map(),actorColors=['#5279d8','#cf7f91','#449e90'];
@@ -242,7 +242,7 @@ function poseCanvas(){
         points.forEach((point,index)=>{if(!point)return;ctx.fillStyle=COLORS[index];ctx.beginPath();ctx.arc(...point,Math.max(3,Math.round(Math.min(out.width,out.height)/125)),0,Math.PI*2);ctx.fill();});
     }return out;
 }
-$('#export-pose').onclick=()=>{const link=document.createElement('a');link.href=renderMannequinReference(state,scene,camera,avatars);link.download='fisher-mannequin-frame.png';link.click();toast('已导出拍摄框内的人偶画面');};
+$('#export-pose').onclick=()=>{const link=document.createElement('a');link.href=renderMannequinReference(state,scene,camera,avatars);link.download='fisher-3d-mannequin-frame.png';link.click();toast('已导出拍摄框内的人偶画面');};
 $('#copy-description').onclick=async()=>{try{await navigator.clipboard.writeText(buildPrompt(state,outputMode,extraPrompt));toast('已复制提示词');}catch{toast('请手动选中提示词复制');}};
 let referenceForFit=null,detectedReference=null;
 const fitHelp=()=>$('#fit-scope').value==='selected'?'只修改选中的人物，保留其他人物、站位和机位。':'替换全部人物，并按参考图重设画幅与机位；可撤销。';
@@ -304,13 +304,13 @@ function load(payload){
 }
 function serialize(){return JSON.stringify({version:3,state,shots,poseReference:renderMannequinReference(state,scene,camera,avatars),cameraPreview:renderMannequinReference(state,scene,camera,avatars,true)});}
 window.addEventListener('message',event=>{
-    if(event.source!==parent||event.origin!==location.origin||event.data?.type!=='fisher-load')return;
+    if(event.source!==parent||event.origin!==location.origin||event.data?.type!=='fisher-3d-load')return;
     try{load(event.data.payload);}catch(error){$('#save-status').textContent='场景读取失败：'+error.message;$('#apply-editor').disabled=true;}
 });
-$('#cancel-editor').onclick=()=>parent.postMessage({type:'fisher-close'},location.origin);
+$('#cancel-editor').onclick=()=>parent.postMessage({type:'fisher-3d-close'},location.origin);
 $('#apply-editor').onclick=()=>{
     if(!$('#output-width').checkValidity()||!$('#output-height').checkValidity()){toast('宽高应为 64–4096 的整数');return;}
-    parent.postMessage({type:'fisher-apply',payload:{scene_json:serialize(),output_mode:outputMode,width:state.outputWidth,height:state.outputHeight,extra_prompt:extraPrompt}},location.origin);
+    parent.postMessage({type:'fisher-3d-apply',payload:{scene_json:serialize(),output_mode:outputMode,width:state.outputWidth,height:state.outputHeight,extra_prompt:extraPrompt}},location.origin);
 };
 if(!embedded){try{const saved=JSON.parse(localStorage.getItem(storageKey)||'null');if(saved){state=migrate(saved.state);shots=saved.shots||[];outputMode=saved.outputMode||outputMode;extraPrompt=saved.extraPrompt||'';}}catch{}$('#apply-editor').hidden=true;$('#cancel-editor').hidden=true;}
 void sceneCube.setImage(state.scenePreview||null).catch(()=>{});
@@ -320,4 +320,4 @@ window.poseStudio={snapshot:()=>clone(state),serialize,load,boneLengths:()=>stat
     joints:()=>Object.fromEntries(state.people.map(p=>{const avatar=avatars.get(p.id),r=renderer.domElement.getBoundingClientRect();return [p.id,Object.fromEntries(Object.keys(JOINT_NAMES).map(name=>{const q=avatar.group.localToWorld(V(...p.points[name])).project(camera);return [name,{x:r.left+(q.x+1)*r.width/2,y:r.top+(1-q.y)*r.height/2}];}))];})),
     projected:()=>Object.fromEntries(state.people.map(p=>[p.id,Object.fromEntries(ORDER.map(name=>{const local=V(...p.points[name]);if(name==='head')local.add(V(0,-.005,.11));const v=avatars.get(p.id).group.localToWorld(local).project(camera);const x=(v.x+1)*container.clientWidth/2,y=(1-v.y)*container.clientHeight/2;return [name,[(x-(container.clientWidth-frameWidth)/2)/frameWidth*state.outputWidth,(y-(container.clientHeight-frameHeight)/2)/frameHeight*state.outputHeight]];}))])),
 };
-if(embedded)parent.postMessage({type:'fisher-ready'},location.origin);
+if(embedded)parent.postMessage({type:'fisher-3d-ready'},location.origin);

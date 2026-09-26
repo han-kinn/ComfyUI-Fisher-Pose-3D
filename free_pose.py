@@ -37,7 +37,7 @@ class FisherQwenFreePose:
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT", "STRING", "IMAGE")
     RETURN_NAMES = ("正向", "负向", "latent", "实际提示词", "人偶姿态图")
     FUNCTION = "encode"
-    CATEGORY = "Fisher/姿态与机位"
+    CATEGORY = "Fisher P3D/姿态与机位"
     DESCRIPTION = "Qwen Image 2.1 自由姿势（单人）。配合 VNCCS_QI2_PoseStudio LoRA：人偶图为 image1、人物图为 image2，提示词固定 Draw character from image2。人偶图尺寸在编辑器里设置；节点 width/height 只决定输出图尺寸，可接分辨率节点，两者无需一致。"
 
     def encode(self, clip, vae, reference_image, width, height, reference_resolution, extra_prompt, pose_json):
@@ -56,4 +56,4 @@ class FisherQwenFreePose:
         positive, negative, encoded_latent = result.result
         # Output size comes from the node, independent of the mannequin (the encoder would size it from image1).
         latent = {"samples": encoded_latent["samples"].new_zeros((1, 64, height // 16, width // 16))}
-        return {"ui": {"fisher_prompt": [prompt]}, "result": (positive, negative, latent, prompt, mannequin)}
+        return {"ui": {"fisher_3d_prompt": [prompt]}, "result": (positive, negative, latent, prompt, mannequin)}

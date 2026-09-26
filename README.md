@@ -1,8 +1,77 @@
+# ComfyUI-Fisher-Pose-3D
+
+在原版 Fisher Pose 基础上增加 DAZ DUF 姿势导入及持久化 3D 图库。
+
+## 来源、改动与声明
+
+本项目是基于 [Work-Fisher/ComfyUI-Fisher-Pose](https://github.com/Work-Fisher/ComfyUI-Fisher-Pose) 的独立衍生版本，不是原作者的官方发布，也不与原作者、MiuProject、AHEKOT、MakeHuman、Qwen 或 three.js 作者存在隶属关系。
+
+本版本保留上游 MIT 许可和第三方许可证，并在此基础上新增或调整：
+
+- 独立的 `Fisher3D*` 节点 ID、前端扩展名、HTTP 路由、缓存和图库目录，使其可与原版同时安装。
+- DAZ Studio `.duf` 姿势导入、Genesis 3 / 8 / 8.1 / 9 及传统 DAZ 骨骼近似重定向、缩略图和持久化 3D 图库。
+- 三图库互斥切换、文件选择器稳定性、3D 节点命名和来源徽标。
+
+完整变更记录见 [CHANGELOG-3D.md](CHANGELOG-3D.md)。使用第三方模型、LoRA、角色资产及姿势资产时，仍须遵守各自的许可和使用条款；本仓库不包含任何商业 DAZ 角色或姿势文件。
+
+## 安装与使用
+
+1. 将压缩包里的 `ComfyUI-Fisher-Pose-3D` 文件夹放入 `ComfyUI/custom_nodes/`。
+2. 可与原版 `ComfyUI-Fisher-Pose` 同时安装。升级时覆盖 3D 版文件夹即可，原版保持原样。
+3. 重启 ComfyUI，浏览器 Ctrl+F5 强制刷新。节点菜单选择「Fisher P3D / 姿态与机位」→「Fisher Qwen2.1 自由姿势（3D）」。
+4. 左侧原图库切换栏下点击「导入3D文件」，选择一个或多个 `.duf`。导入后自动应用、调整画框、生成缩略图并保存。
+5. 「3D图库」支持搜索、点击缩略图应用、逐项删除。数据保存在 `ComfyUI/input/fisher_pose_3d/`，包含原文件副本、解析姿势及缩略图；重启/更换浏览器后仍可用。
+6. 调整后点击「应用到节点」，沿用原插件的预览与工作流输出。
+
+## 两个版本的区分（界面修复版）
+
+| 项目 | 原版 | 3D 版 |
+| --- | --- | --- |
+| 插件目录 | `custom_nodes/ComfyUI-Fisher-Pose` | `custom_nodes/ComfyUI-Fisher-Pose-3D` |
+| 来源徽标 | `Fisher-Pose` | `Fisher-Pose-3D` |
+| 节点分类 | `Fisher` | `Fisher P3D` |
+| 节点 ID | `FisherPoseStudio`、`FisherQwenPose`、`FisherQwenFreePose`、`FisherQwen21GGUFCLIP` | `Fisher3DPoseStudio`、`Fisher3DQwenPose`、`Fisher3DQwenFreePose`、`Fisher3DQwen21GGUFCLIP` |
+| 前端注册名 | `Fisher.PoseStudio` | `Fisher3D.PoseStudio` |
+| HTTP 接口 | `/fisher_pose/*` | `/fisher_pose_3d/*` |
+| OpenPose 我的图库 | `input/fisher_openpose/` | `input/fisher_pose_3d/openpose/` |
+| DUF 图库 | 无 | `input/fisher_pose_3d/*.json`（保留上一版位置） |
+| 节点预览缓存 | `temp/fisher_freepose_*.png` | `temp/fisher_pose_3d/fisher_3d_freepose_*.png` |
+| 独立编辑器浏览器缓存 | `fisher-pose-multi-v2` | `fisher-pose-3d-multi-v2` |
+
+所有 3D 节点显示名称以「（3D）」结尾；自由姿势节点保留「打开自由姿势编辑器」按钮。来源徽标由插件目录决定，请保持目录名为 `ComfyUI-Fisher-Pose-3D`，不要改名成原版目录。
+
+两版也使用独立的编辑器消息、文件选择回调及提示词缓存。各自的清空/删除操作只作用于本版图库。
+
+**工作流：**旧工作流仍指向原版节点，不会被 3D 版接管。3D 版自带 `workflows/` 已改用新节点 ID。若要把旧工作流切到 3D 版，可用下面的工具生成副本（连线、参数和已保存姿势保留）：
+
+```text
+python tools/convert_workflow_3d.py 原工作流.json 另存的3D工作流.json
+```
+
+第一版 3D 插件曾使用原版 ID，因此其旧工作流同样需要转换。转换工具不覆盖已有文件，也不改动输入文件。之前共享的 OpenPose 图库继续留给原版；需要用于 3D 版的图片可重新选择导入。DUF 历史无需迁移。
+
+## DUF 支持范围
+
+导入按钮与 3D 图库采用与上方一致的分段控件样式；选择 3D 图库时替换下方 OpenPose 图库，点上方分类可切换回来。取消文件选择不会关闭姿势编辑器。
+
+本次包含 Python 后端修正，覆盖安装后需重启 ComfyUI，再 Ctrl+F5 强制刷新。
+
+- 支持 JSON 与 gzip 压缩 DUF；每文件及解压后各限 16MB；支持多选，内容相同的文件自动去重。
+- 支持 Genesis 3、8、8.1、9 的标准人体 DUF 骨骼命名，并保留传统 DAZ / Genesis 1、2 命名兼容；合并 bend/twist、胸腹、颈部及手掌链，映射身体和手指。姿势是可编辑的真实三维骨骼旋转。
+- 多帧文件取离时间 0 最近的关键帧。多人预设请先在 DAZ 另存单人姿势。
+- 纯姿势预设通常不含源骨骼定义：采用默认旋转顺序和初始姿态近似重定向；不同 Genesis 版本、体型、关节方向和手指可能需要微调，不能保证与 DAZ 逐关节完全一致。文件带 orientation/rotation_order 时优先使用。
+- 不导入 DAZ 网格、材质、衣物、表情、形变、角色缩放及场景位移；保持现有人偶和自动居中。已用提供的 G8、G8.1、G9 样本完成导入、预览和缩略图验证。自定义骨架与仅有 ERC/Pose Controls、需要外部角色资产计算的预设不能保证完整还原。
+- 转换依据 [DAZ DSON 节点变换规范](https://docs.daz3d.com/public/dson_spec/object_definitions/node/start)。
+
+---
+
+以下为上游插件文档（原版下载链接仅用于溯源）：
+
 https://github.com/user-attachments/assets/24dc201a-d9dc-4ac7-86a8-acc9d8f6dd7c
 
 <div align="center">
 
-# Fisher Pose · 机位与姿态
+# ComfyUI-Fisher-Pose-3D
 
 **给 Qwen Image 2.1 用的姿势与机位编辑插件：拖一拖 3D 人偶，或者点一张 OpenPose 骨架图，人物就摆成你要的样子。**
 
@@ -54,7 +123,7 @@ https://github.com/user-attachments/assets/24dc201a-d9dc-4ac7-86a8-acc9d8f6dd7c
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/Work-Fisher/ComfyUI-Fisher-Pose.git
+git clone https://github.com/<你的-GitHub-账号>/ComfyUI-Fisher-Pose-3D.git
 ```
 
 装好后重启 ComfyUI 并刷新浏览器。插件不需要额外安装 Python 依赖，节点搜 `Fisher` 就能找到。
@@ -103,6 +172,7 @@ ComfyUI 需要是带 `TextEncodeQwenImage21` 节点的新版本。
 - 自由姿势目前只支持单人。OpenPose 图里有多人时，只取身形最大的那个人。
 - 2D 骨架无法唯一确定前后深度，复杂姿势需要手动翻转或微调。头部朝向、手指、脚掌不会从骨架读取。
 - 人偶图只提供姿势。输出比例和人偶图差别很大时，人物在画面里的位置由模型决定。
+- DUF 导入只读取姿势旋转；不导入网格、材质、衣物、形变、表情和场景布局。未包含骨骼定义的预设采用默认骨架近似转换，复杂手指、关节方向、ERC / Pose Controls、自定义角色骨架和旧式非 DUF 文件无法保证逐关节还原。
 
 ---
 

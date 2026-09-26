@@ -81,7 +81,7 @@ class FisherQwenPose:
     RETURN_TYPES = ("CONDITIONING", "CONDITIONING", "LATENT", "STRING", "IMAGE", "IMAGE")
     RETURN_NAMES = ("正向", "负向", "latent", "实际提示词", "人偶姿态图", "镜头预览图")
     FUNCTION = "encode"
-    CATEGORY = "Fisher/姿态与机位"
+    CATEGORY = "Fisher P3D/姿态与机位"
     DESCRIPTION = "Qwen Image 2.1 专用。人物参考图连续接入1–3；内部将人偶参考图放在最后一张并绑定正向提示词。自动：单图多人共用图1，多图按人物列表顺序对应。编辑器内上传仅用于骨架适配，不代替这些图像输入。"
 
     def encode(self, clip, vae, reference_image_1, output_mode, width, height,
@@ -122,4 +122,4 @@ class FisherQwenPose:
         latent = {"samples": encoded_latent["samples"].new_zeros((1, 64, height // 16, width // 16))}
         from .pose_reference import camera_preview
         preview=torch.from_numpy(np.asarray(camera_preview(scene_json)).astype(np.float32)/255).unsqueeze(0)
-        return {"ui": {"fisher_prompt": [prompt]}, "result": (positive, negative, latent, prompt, skeleton, preview)}
+        return {"ui": {"fisher_3d_prompt": [prompt]}, "result": (positive, negative, latent, prompt, skeleton, preview)}

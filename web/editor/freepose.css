@@ -43,3 +43,16 @@
 .fp-spinner{width:30px;height:30px;border:3px solid #ffffff30;border-top-color:#8aa4ff;border-radius:50%;animation:fp-spin 1s linear infinite}
 @keyframes fp-spin{to{transform:rotate(360deg)}}
 .fp-sources{margin-bottom:10px}.fp-sources button{padding:6px 4px;font-size:11px}
+
+.fp-duf-actions { margin: 10px 0; }
+.fp-duf-actions button { flex: 1; }
+#duf-library { border: 1px solid #dce3ed; border-radius: 8px; padding: 8px; margin-bottom: 10px; }
+#duf-gallery { max-height: 380px; overflow-y: auto; }
+.fp-duf-card { min-width: 0; }
+.fp-duf-card .fp-thumb { width: 100%; background: #f2f4f8; }
+.fp-duf-card .fp-thumb span { max-width: 100%; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; background: #162238c9; color: white; }
+.fp-duf-delete { width: 100%; padding: 3px; margin: 3px 0 8px; font-size: 11px; }
+#duf-status { overflow-wrap: anywhere; }
+@media(max-width:760px){.fp-left{display:block}.fp-left section:first-child{display:block}.fp-left section{margin-bottom:20px}}
+
+#duf-library[hidden], #openpose-library[hidden], #duf-status[hidden] { display: none !important; }

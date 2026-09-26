@@ -178,7 +178,7 @@
     },
     {
       "id": 6,
-      "type": "FisherQwenFreePose",
+      "type": "Fisher3DQwenFreePose",
       "pos": [
         400,
         160
@@ -245,7 +245,7 @@
         }
       ],
       "properties": {
-        "Node name for S&R": "FisherQwenFreePose"
+        "Node name for S&R": "Fisher3DQwenFreePose"
       },
       "widgets_values": [
         1024,
@@ -253,7 +253,8 @@
         1024,
         "",
         "{}"
-      ]
+      ],
+      "title": "Fisher Qwen2.1 自由姿势（3D）"
     },
     {
       "id": 7,
