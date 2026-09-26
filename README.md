@@ -148,6 +148,16 @@ ComfyUI 需要是带 `TextEncodeQwenImage21` 节点的新版本。
 
 > `extra_prompt` 会另起一行附在固定指令后面，建议写英文，例如 `soft studio light`。
 
+## 示例工作流：最强姿势自由编辑 3D
+
+仓库的 [workflows/Fisher-Pose-3D-自由姿势示例.json](workflows/Fisher-Pose-3D-自由姿势示例.json) 是可直接拖入 ComfyUI 的单人自由姿势工作流。它串联 Qwen Image 2.1、VNCCS PoseStudio LoRA、分辨率选择器、`Fisher Qwen2.1 自由姿势（3D）`、采样与保存节点。
+
+导入后，在「人物图 → image2」选择自己的参考图，确认所需模型和 LoRA 已安装，再点击 `Fisher Qwen2.1 自由姿势（3D）` 节点中的「打开自由姿势编辑器」。工作流不含用户图片、商业 DAZ 文件或本机绝对路径；原工作流中保存的图片名称仅作为 ComfyUI 的可替换占位引用。
+
+![自由姿势 3D 编辑器：DUF 导入和 3D 图库](docs/images/freepose-3d-editor-duf-gallery.png)
+
+截图展示了编辑器的「导入3D文件」和「3D图库」区域，以及导入后可以继续手动调整的人偶姿势。
+
 ## 致谢
 
 这个插件的自由姿势模式建立在以下开源工作之上，感谢各位作者的付出：
