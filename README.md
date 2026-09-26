@@ -150,7 +150,9 @@ ComfyUI 需要是带 `TextEncodeQwenImage21` 节点的新版本。
 
 ## 示例工作流：最强姿势自由编辑 3D
 
-仓库的 [workflows/Fisher-Pose-3D-自由姿势示例.json](workflows/Fisher-Pose-3D-自由姿势示例.json) 是可直接拖入 ComfyUI 的单人自由姿势工作流。它串联 Qwen Image 2.1、VNCCS PoseStudio LoRA、分辨率选择器、`Fisher Qwen2.1 自由姿势（3D）`、采样与保存节点。
+用户提供的工作流按原文件名保存在 [workflows/【Work-Fisher】26-9-26最强姿势自由编辑3D.json](workflows/%E3%80%90Work-Fisher%E3%80%9126-9-26%E6%9C%80%E5%BC%BA%E5%A7%BF%E5%8A%BF%E8%87%AA%E7%94%B1%E7%BC%96%E8%BE%913D.json)。它串联 Qwen Image 2.1、VNCCS PoseStudio LoRA、分辨率选择器、`Fisher Qwen2.1 自由姿势（3D）`、采样与保存节点。
+
+`Fisher-Pose-3D-自由姿势示例.json` 保留首次提交的内容。用户反馈该示例存在问题，目前尚未定位；本次按原名上传的文件与该首次提交内容相同，仅验证了 JSON 可解析，尚未验证完整生成流程。
 
 导入后，在「人物图 → image2」选择自己的参考图，确认所需模型和 LoRA 已安装，再点击 `Fisher Qwen2.1 自由姿势（3D）` 节点中的「打开自由姿势编辑器」。工作流不含用户图片、商业 DAZ 文件或本机绝对路径；原工作流中保存的图片名称仅作为 ComfyUI 的可替换占位引用。
 
