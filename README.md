@@ -2,6 +2,8 @@
 
 在原版 Fisher Pose 基础上增加 DAZ DUF 姿势导入及持久化 3D 图库。
 
+**2026-09-30：自由姿势支持5个角色和5路人物参考图。** 左侧顶部管理角色，蓝色高亮当前选择；DUF导入应用选中角色，应用到节点保存完整场景。查看[五角色使用方法、资料来源与限制](docs/five-characters.md)。多人生成绑定为实验性功能，单人旧工作流继续使用。
+
 ## 来源、改动与声明
 
 本项目是基于 [Work-Fisher/ComfyUI-Fisher-Pose](https://github.com/Work-Fisher/ComfyUI-Fisher-Pose) 的独立衍生版本，不是原作者的官方发布，也不与原作者、MiuProject、AHEKOT、MakeHuman、Qwen 或 three.js 作者存在隶属关系。
@@ -90,7 +92,7 @@ https://github.com/user-attachments/assets/24dc201a-d9dc-4ac7-86a8-acc9d8f6dd7c
 
 | 模式 | 节点 | 一句话 |
 |---|---|---|
-| **自由姿势** | `Fisher Qwen2.1 自由姿势` | 单人任意摆姿：真人比例 3D 人偶 + VNCCS PoseStudio LoRA，把参考图里的人物重画成新姿势 |
+| **自由姿势** | `Fisher Qwen2.1 自由姿势（3D）` | 1–5个独立3D角色，分别对应5路参考图；单人沿用VNCCS约定，多人生成绑定为实验性 |
 | **自由视角** | `Fisher Qwen2.1 人物与姿态编码` | 1–3 人共用机位：转镜头、改站位与动作，中文编辑指令，可接 PE 扩写（[详细说明](docs/自由视角详细说明.md)） |
 
 ### 自由姿势亮点
@@ -123,7 +125,7 @@ https://github.com/user-attachments/assets/24dc201a-d9dc-4ac7-86a8-acc9d8f6dd7c
 
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/<你的-GitHub-账号>/ComfyUI-Fisher-Pose-3D.git
+git clone https://github.com/han-kinn/ComfyUI-Fisher-Pose-3D.git
 ```
 
 装好后重启 ComfyUI 并刷新浏览器。插件不需要额外安装 Python 依赖，节点搜 `Fisher` 就能找到。
@@ -181,7 +183,7 @@ ComfyUI 需要是带 `TextEncodeQwenImage21` 节点的新版本。
 
 ## 已知限制
 
-- 自由姿势目前只支持单人。OpenPose 图里有多人时，只取身形最大的那个人。
+- 自由姿势支持最多5个角色。每次 OpenPose 导入只取图中身形最大的人并应用当前选中角色；多个DUF文件可依次导入不同角色。
 - 2D 骨架无法唯一确定前后深度，复杂姿势需要手动翻转或微调。头部朝向、手指、脚掌不会从骨架读取。
 - 人偶图只提供姿势。输出比例和人偶图差别很大时，人物在画面里的位置由模型决定。
 - DUF 导入只读取姿势旋转；不导入网格、材质、衣物、形变、表情和场景布局。未包含骨骼定义的预设采用默认骨架近似转换，复杂手指、关节方向、ERC / Pose Controls、自定义角色骨架和旧式非 DUF 文件无法保证逐关节还原。

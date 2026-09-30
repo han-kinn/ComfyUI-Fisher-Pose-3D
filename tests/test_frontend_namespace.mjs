@@ -57,7 +57,7 @@ test('free-pose button opens its own 3D editor iframe',async()=>{
       addWidget(type,name,value,callback){const w={type,name,callback};this.widgets.push(w);return w;}};
     ext.nodeCreated(node);
     node.widgets.find(w=>w.type==='button').callback();
-    assert.match(elements.find(e=>e.tag==='iframe').src,/editor\/freepose\.html\?embedded=1&v=20260926-gallery6$/);
+    assert.match(elements.find(e=>e.tag==='iframe').src,/editor\/freepose\.html\?embedded=1&v=20260930-characters1$/);
     assert.equal(elements.find(e=>e.tag==='dialog').open,true);
 });
 

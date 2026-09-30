@@ -2,9 +2,9 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const EDITORS = {
-    studio: { url: new URL("./editor/studio.html", import.meta.url), version: "20260926-gallery6", title: "Fisher 3D 机位与姿态编辑器",
+    studio: { url: new URL("./editor/studio.html", import.meta.url), version: "20260930-characters1", title: "Fisher 3D 机位与姿态编辑器",
               fields: ["scene_json", "output_mode", "width", "height", "extra_prompt"], data: "scene_json", image: "reference_image_1" },
-    freePose: { url: new URL("./editor/freepose.html", import.meta.url), version: "20260926-gallery6", title: "Fisher Pose 3D 自由姿势编辑器",
+    freePose: { url: new URL("./editor/freepose.html", import.meta.url), version: "20260930-characters1", title: "Fisher Pose 3D 自由姿势编辑器",
                 fields: ["pose_json", "extra_prompt"], data: "pose_json", image: "reference_image" },
 };
 const editorFor = node => (node.comfyClass || node.type) === "Fisher3DQwenFreePose" ? EDITORS.freePose : EDITORS.studio;
@@ -113,6 +113,7 @@ function openEditor(node) {
                 };
             }
             payload.referencePreview=upstreamPreview(node,editor.image);
+            if (editor === EDITORS.freePose) payload.referencePreviews = Array.from({length: 5}, (_, i) => upstreamPreview(node, i ? `reference_image_${i + 1}` : 'reference_image'));
             frame.contentWindow.postMessage({ type: "fisher-3d-load", payload }, location.origin);
         }
         if (event.data?.type === "fisher-3d-close") close();

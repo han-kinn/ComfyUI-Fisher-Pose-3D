@@ -74,6 +74,27 @@ class FreePoseTests(unittest.TestCase):
     def test_extra_prompt_follows_instruction(self):
         self.assertEqual(free_pose_prompt('  red dress \n\n studio light '), 'Draw character from image2\nred dress\nstudio light')
 
+    def test_five_references_and_stable_sparse_slots(self):
+        for slots in ([1, 2, 3, 4, 5], [2, 5]):
+            saved = json.loads(pose_json())
+            saved['characters'] = [{'slot': slot} for slot in slots]
+            refs = {f'reference_image_{slot}': torch.full((1, 32, 32, 3), slot / 10) for slot in range(2, 6)}
+            args = self.args(pose_json=json.dumps(saved), **refs)
+            if 1 not in slots: args['reference_image'] = None
+            result = FisherQwenFreePose().encode(**args)['result']
+            images = args['clip'].calls[0][1]['images']
+            self.assertEqual(len(images), 1 + len(slots))
+            for index, slot in enumerate(slots, 2):
+                self.assertIn(f'labeled {slot} in <image1> with the character from <image{index}>', result[3])
+                self.assertAlmostEqual(float(images[index - 1].mean()), .2 if slot == 1 else slot / 10, delta=1 / 255)
+
+    def test_missing_role_reference_and_duplicate_slots_fail(self):
+        for slots in ([1, 3], [1, 1], [6], []):
+            saved = json.loads(pose_json()); saved['characters'] = [{'slot': slot} for slot in slots]
+            args = self.args(pose_json=json.dumps(saved))
+            with self.assertRaises(ValueError): FisherQwenFreePose().encode(**args)
+            self.assertEqual(args['clip'].calls, [])
+
     def test_invalid_inputs_do_not_encode(self):
         cases = [
             self.args(pose_json='{}'),

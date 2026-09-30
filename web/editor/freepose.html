@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fisher Pose 3D · 自由姿势</title><link rel="icon" href="data:,"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="freepose.css?v=20260926-gallery6"></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fisher Pose 3D · 自由姿势</title><link rel="icon" href="data:,"><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="freepose.css?v=20260930-characters1"></head>
 <body>
-<header class="appbar"><div class="brand"><span class="brand-icon">⌘</span><b>Fisher Pose 3D</b><span class="divider"></span><span>自由姿势</span><small>单人 · VNCCS 人偶 · 正面输出</small></div><div class="header-actions"><span id="save-status">编辑后应用到节点</span><button id="undo" title="撤销 Ctrl+Z">↶ 撤销</button><button id="redo" title="重做 Ctrl+Shift+Z">↷</button><button id="cancel-editor">取消</button><button class="primary" id="apply-editor" disabled>应用到节点</button></div></header>
+<header class="appbar"><div class="brand"><span class="brand-icon">⌘</span><b>Fisher Pose 3D</b><span class="divider"></span><span>自由姿势</span><small>1–5人 · VNCCS 人偶 · 正面输出</small></div><div class="header-actions"><span id="save-status">编辑后应用到节点</span><button id="undo" title="撤销 Ctrl+Z">↶ 撤销</button><button id="redo" title="重做 Ctrl+Shift+Z">↷</button><button id="cancel-editor">取消</button><button class="primary" id="apply-editor" disabled>应用到节点</button></div></header>
 <main class="fp-main">
 <aside class="left-panel fp-left">
+<section id="characters-panel"><div class="section-heading"><h2>角色 · 最多5人</h2><button id="add-character" type="button">添加</button></div><div id="character-list"></div><p class="muted">角色编号对应节点参考图编号。先选择角色，再导入 DUF；蓝色人物为当前编辑角色。</p><button id="arrange-characters" type="button">全部人物排入画框</button></section>
 <section><div class="section-heading"><h2>OpenPose 一键摆姿</h2><span><small id="gallery-count"></small> <button class="text-button" id="clear-gallery" hidden>清空</button></span></div>
 <div class="segmented fp-sources" id="gallery-source"><button data-source="builtin" class="active">FISHER小彩蛋</button><button data-source="library">我的图库</button></div>
 <div class="segmented fp-sources fp-duf-actions"><button id="import-duf" type="button">导入3D文件</button><button id="show-duf-gallery" type="button" aria-expanded="false">3D图库</button></div><input type="file" id="pick-duf" accept=".duf" multiple hidden>
@@ -56,7 +57,7 @@
 <section><div class="section-heading"><h2>头颈与四肢比例</h2><button class="text-button" id="reset-proportions">重置</button></div><div id="proportion-sliders"></div><p class="muted">100% 为默认比例，左右对称调整。改动后姿势保持不变，手脚位置会随骨长变化。</p></section>
 </div>
 <section class="description-section"><div class="section-heading"><h2>人偶图 · image1</h2><small id="preview-size"></small></div><img id="capture-preview" alt="人偶图预览"><div id="person-preview-wrap" hidden><div class="section-heading"><h2>人物图 · image2</h2></div><img id="person-preview" alt="人物图"></div></section>
-<section class="description-section"><div class="section-heading"><h2>提示词</h2><button id="copy-description" class="text-button">复制</button></div><label class="field-label">补充要求（建议英文）<textarea id="extra-prompt" placeholder="例如：keep the outfit, soft studio light"></textarea></label><p id="description"></p><span class="description-note">LoRA 训练指令固定，补充内容另起一行附在后面</span></section>
+<section class="description-section"><div class="section-heading"><h2>提示词</h2><button id="copy-description" class="text-button">复制</button></div><label class="field-label">补充要求（建议英文）<textarea id="extra-prompt" placeholder="例如：keep the outfit, soft studio light"></textarea></label><p id="description"></p><span class="description-note">单人沿用 LoRA 指令；多人按角色编号绑定参考图（实验性）</span></section>
 </aside></main>
-<footer class="app-footer"><span>Fisher Pose 3D <span class="footer-dot">/</span> Free Pose · mannequin core © MiuProject (MIT)</span><span>人偶图 → image_1，人物图 → image_2</span></footer>
-<script type="module" src="freepose.mjs?v=20260926-gallery6"></script></body></html>
+<footer class="app-footer"><span>Fisher Pose 3D <span class="footer-dot">/</span> Free Pose · mannequin core © MiuProject (MIT)</span><span>角色1–5 ↔ 参考图1–5</span></footer>
+<script type="module" src="freepose.mjs?v=20260930-characters1"></script></body></html>

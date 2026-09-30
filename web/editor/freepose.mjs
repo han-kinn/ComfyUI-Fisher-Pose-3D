@@ -1,5 +1,5 @@
 import { retargetDuf } from './duf-import.mjs?v=20260926-gallery6';
-// Free-pose editor: one VNCCS MakeHuman mannequin. Editing uses a free orbit view;
+// Free-pose editor: up to five VNCCS MakeHuman mannequins. Editing uses a free orbit view;
 // the output is always the VNCCS front capture (yaw 0 / pitch 0, white background,
 // flat white ambient light), which is what the VNCCS_QI2_PoseStudio LoRA was trained on.
 import { PoseViewerCore } from '../vnccs/vnccs_pose_studio_core.mjs';
@@ -44,10 +44,106 @@ let ready = false;
 let selectedBoneName = null;
 let previewTimer = null;
 let morphTimer = null;
+let characters = [{ slot: 1, ...structuredClone(doc) }], activeSlot = 1, referencePreviews = [];
+const histories = new Map();
+
+function storeCharacter() {
+    doc.pose = savedPose();
+    Object.assign(characters.find(c => c.slot === activeSlot), structuredClone(doc));
+    histories.set(activeSlot, { history: [...viewer.history], future: [...viewer.future] });
+}
+
+function highlightCharacter() {
+    viewer.setActiveCharacterAppearance({ color: '#8dbbff', transform: doc.transform });
+}
+
+function renderCharacters() {
+    const list = $('#character-list'); list.replaceChildren();
+    for (let slot = 1; slot <= 5; slot++) {
+        const character = characters.find(c => c.slot === slot);
+        const row = document.createElement('div'); row.className = 'fp-character';
+        const select = document.createElement('button');
+        select.textContent = `角色${slot} → 参考图${slot}${character ? '' : '（空）'}`;
+        select.classList.toggle('active', slot === activeSlot);
+        select.disabled = !character || dufBusy;
+        select.onclick = () => selectCharacter(slot);
+        const remove = document.createElement('button'); remove.textContent = '删除';
+        remove.disabled = !character || characters.length === 1 || dufBusy;
+        remove.onclick = () => {
+            if (slot === activeSlot) selectCharacter(characters.find(c => c.slot !== slot).slot);
+            characters = characters.filter(c => c.slot !== slot);
+            histories.delete(slot); viewer.removePassiveCharacter(String(slot));
+            highlightCharacter(); renderCharacters(); refreshControls(); schedulePreview();
+        };
+        row.append(select, remove); list.append(row);
+    }
+    $('#add-character').disabled = characters.length === 5 || dufBusy;
+    const preview = referencePreviews[activeSlot - 1];
+    $('#person-preview-wrap').hidden = !preview;
+    if (preview) $('#person-preview').src = preview;
+    $('#person-preview-wrap h2').textContent = `角色${activeSlot} · 参考图${activeSlot}`;
+}
+
+function selectCharacter(slot) {
+    if (slot === activeSlot) return;
+    clearTimeout(morphTimer);
+    storeCharacter();
+    viewer.upsertPassiveCharacterFromActive(String(activeSlot), { pose: doc.pose, color: '#ffffff', transform: doc.transform });
+    const { width, height } = doc;
+    activeSlot = slot;
+    doc = { ...structuredClone(characters.find(c => c.slot === slot)), width, height };
+    viewer.removePassiveCharacter(String(slot));
+    loadModel(doc.pose);
+    const history = histories.get(slot);
+    viewer.history = history?.history || []; viewer.future = history?.future || [];
+    activeDuf = doc.dufId || null;
+    renderDufGallery();
+    highlightCharacter(); refreshControls(); refreshFlips(); renderCharacters(); schedulePreview();
+}
+
+function addCharacter() {
+    if (characters.length >= 5) return;
+    const slot = [1, 2, 3, 4, 5].find(s => !characters.some(c => c.slot === s));
+    characters.push({ slot, mesh: { ...DEFAULT_MESH }, proportions: { ...DEFAULT_PROPORTIONS }, pose: null,
+        transform: { ...NEUTRAL_TRANSFORM }, openpose: null });
+    selectCharacter(slot);
+    fitFrame(true);
+    arrangeCharacters();
+}
+
+function arrangeCharacters() {
+    storeCharacter();
+    // Keep a common front camera; lay out independently posed figures in equal-width cells.
+    const original = activeSlot;
+    const ordered = [...characters].sort((a, b) => a.slot - b.slot);
+    const camera = viewer.captureCamera;
+    const distance = camera.position.distanceTo(viewer.sceneCameraTarget);
+    const frameWidth = 2 * distance * Math.tan(camera.fov * Math.PI / 360) / camera.zoom * doc.width / doc.height;
+    const columns = Math.min(3, ordered.length), rows = Math.ceil(ordered.length / columns);
+    const frameHeight = frameWidth * doc.height / doc.width;
+    ordered.forEach((character, index) => {
+        selectCharacter(character.slot);
+        fitFrame(false);
+        const scale = 1 / Math.max(columns, rows);
+        const pivot = viewer.sceneCameraTarget;
+        doc.transform = { x: pivot.x + (doc.transform.x - pivot.x) * scale + frameWidth * ((index % columns + 0.5) / columns - 0.5),
+            y: pivot.y + (doc.transform.y - pivot.y) * scale + frameHeight * (0.5 - (Math.floor(index / columns) + 0.5) / rows),
+            z: pivot.z + (doc.transform.z - pivot.z) * scale, zoom: doc.transform.zoom * scale };
+        highlightCharacter();
+    });
+    selectCharacter(original); storeCharacter(); updateCamera(true);
+}
+
+$('#add-character').addEventListener('click', () => { try { if (ready && !dufBusy) addCharacter(); else toast('请等待人偶加载或导入完成'); } catch (error) { toast(error.message); console.error(error); } });
+$('#arrange-characters').onclick = () => { if (ready && !dufBusy) arrangeCharacters(); };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const round16 = value => clamp(Math.round(value / 16) * 16, 64, 4096);
-const promptText = () => [INSTRUCTION, ...extraPrompt.split('\n').map(line => line.trim())].filter(Boolean).join('\n');
+const promptText = () => characters.length === 1 && characters[0].slot === 1
+    ? [INSTRUCTION, ...extraPrompt.split('\n').map(line => line.trim())].filter(Boolean).join('\n')
+    : ['Use <image1> as the composition and pose guide.',
+        ...[...characters].sort((a, b) => a.slot - b.slot).map((c, i) => `Replace mannequin labeled ${c.slot} in <image1> with the character from <image${i + 2}>; preserve that mannequin's pose, position and scale.`),
+        "Keep each character's identity separate. Remove all numeric labels in the final image. Do not add extra people.", extraPrompt.trim()].filter(Boolean).join('\n');
 
 function toast(text) {
     const element = $('#toast');
@@ -145,7 +241,8 @@ function loadModel(pose) {
     applyNeck();
     viewer.updateLights(CAPTURE_LIGHTS);
     if (pose) viewer.setPose(pose, true);
-    viewer.setActiveCharacterAppearance({ color: '#ffffff', transform: doc.transform });
+    else resetPose();
+    highlightCharacter();
 }
 
 // The capture camera never moves; `snap` also brings the free editing view back to it.
@@ -176,7 +273,9 @@ function fitFrame(snap = false) {
 
 function capture(width, height) {
     viewer.updateLights(CAPTURE_LIGHTS);
-    return viewer.capture(width, height, 1, CAPTURE_BACKGROUND, 0, 0, FRONT.yaw, FRONT.pitch);
+    viewer.setActiveCharacterAppearance({ color: '#ffffff' });
+    try { return viewer.capture(width, height, 1, CAPTURE_BACKGROUND, 0, 0, FRONT.yaw, FRONT.pitch); }
+    finally { highlightCharacter(); }
 }
 
 function schedulePreview() {
@@ -427,16 +526,23 @@ async function loadDufLibrary() {
     dufEntries = (await dufRequest()).files; renderDufGallery();
 }
 async function applyDuf(entry) {
+    const placement = { ...doc.transform };
     const converted = retargetDuf(entry.pose, viewer);
     viewer.recordState();
     doc.openpose = null; refreshFlips();
     viewer.setPose(converted.pose, true);
     applyNeck(); viewer.updateIKEffectorPositions?.();
-    fitFrame(true); refreshControls(); schedulePreview();
+    if (characters.length === 1) fitFrame(true);
+    else { doc.transform = placement; highlightCharacter(); updateCamera(false); }
+    doc.dufId = entry.id;
+    refreshControls(); schedulePreview();
     activeDuf = entry.id;
     $('#duf-status').textContent = `已应用「${entry.name}」：${converted.count} 个骨骼。${converted.warning}。`;
     await viewer.waitForCaptureReady();
-    const thumbnail = capture(256, 256);
+    viewer.setPassiveCharactersVisible(false);
+    let thumbnail;
+    try { thumbnail = capture(256, 256); }
+    finally { viewer.setPassiveCharactersVisible(true); }
     updateCamera(false);
     if (thumbnail) {
         try { await dufRequest('/' + entry.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thumbnail }) }); }
@@ -445,6 +551,8 @@ async function applyDuf(entry) {
 }
 function setDufBusy(value) {
     dufBusy = value; $('#pick-duf').disabled = value; $('#import-duf').disabled = value;
+    $('#apply-editor').disabled = value;
+    renderCharacters();
     renderDufGallery();
 }
 async function useDufEntry(id) {
@@ -458,6 +566,7 @@ async function importDufFiles(files) {
     if (!ready || dufBusy) { toast('请等待人偶或导入完成'); return; }
     const selected = [...files].filter(f => /\.duf$/i.test(f.name));
     if (!selected.length) { toast('请选择 .duf 姿势文件'); return; }
+    if (selected.length > 6 - characters.length) { toast('剩余角色槽位不足：首个文件应用当前角色，其余文件新增角色，最多5人'); return; }
     setDufBusy(true);
     showDufPanel(true);
     const errors = [];
@@ -466,7 +575,9 @@ async function importDufFiles(files) {
         try {
             if (file.size > 16 * 1024 * 1024) throw new Error('文件超过 16MB');
             const form = new FormData(); form.append('file', file, file.name);
-            await applyDuf(await dufRequest('', { method: 'POST', body: form }));
+            const entry = await dufRequest('', { method: 'POST', body: form });
+            if (index > 0) addCharacter();
+            await applyDuf(entry);
         } catch (error) { errors.push(`${file.name}：${error.message}`); }
     }
     try { await loadDufLibrary(); } catch (error) { errors.push(error.message); }
@@ -503,7 +614,10 @@ $('#duf-filter').oninput = renderDufGallery;
 
 // --- Viewport interaction: our editor's feel on top of the VNCCS core -------
 
+let interactionReady = false;
 function setupInteraction() {
+    if (interactionReady) return;
+    interactionReady = true;
     const THREE = viewer.THREE;
     viewer.orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
     // Shift+drag moves the person inside the front frame; it must pre-empt orbit and bone picking.
@@ -697,16 +811,33 @@ new ResizeObserver(() => viewer.resize(stage.clientWidth, stage.clientHeight)).o
 
 async function serialize() {
     await viewer.waitForCaptureReady();
-    const poseReference = capture(doc.width, doc.height);
+    let poseReference = capture(doc.width, doc.height);
+    if (characters.length > 1 || activeSlot !== 1) {
+        const output = document.createElement('canvas'); output.width = doc.width; output.height = doc.height;
+        const context = output.getContext('2d');
+        const image = new Image(); image.src = poseReference; await image.decode(); context.drawImage(image, 0, 0);
+        const size = Math.max(20, Math.round(doc.width / 40));
+        context.font = `bold ${size}px sans-serif`; context.textAlign = 'center'; context.textBaseline = 'middle';
+        for (const character of characters) {
+            const bones = character.slot === activeSlot ? viewer.bones : viewer.passiveCharacters.get(String(character.slot)).bones;
+            const point = bones.head.getWorldPosition(new viewer.THREE.Vector3()).project(viewer.captureCamera);
+            const x = clamp((point.x + 1) * doc.width / 2, size, doc.width - size);
+            const y = clamp((1 - point.y) * doc.height / 2 - size, size, doc.height - size);
+            context.fillStyle = '#ffffff'; context.fillRect(x - size * 0.7, y - size * 0.7, size * 1.4, size * 1.4);
+            context.fillStyle = '#17213b'; context.fillText(String(character.slot), x, y);
+        }
+        poseReference = output.toDataURL('image/png');
+    }
     updateCamera(false);
-    doc.pose = savedPose();
-    return JSON.stringify({ version: 2, kind: 'vnccs-free-pose', ...doc, camera: FRONT, poseReference });
+    storeCharacter();
+    return JSON.stringify({ version: 3, kind: 'vnccs-free-pose', ...doc, characters, activeSlot, camera: FRONT, poseReference });
 }
 
 function applyPayload(payload) {
     const saved = JSON.parse(payload.pose_json || '{}');
     const restored = saved.kind === 'vnccs-free-pose';
     if (restored) {
+        if (saved.characters && (!Array.isArray(saved.characters) || !saved.characters.length || saved.characters.length > 5 || saved.characters.some(c => !Number.isInteger(c.slot) || c.slot < 1 || c.slot > 5) || new Set(saved.characters.map(c => c.slot)).size !== saved.characters.length)) throw new Error('角色数据无效');
         doc = {
             mesh: { ...DEFAULT_MESH, ...saved.mesh, breast_size: 0 }, pose: saved.pose || null, // flat chest is fixed
             proportions: { ...DEFAULT_PROPORTIONS, ...saved.proportions },
@@ -715,8 +846,14 @@ function applyPayload(payload) {
             width: round16(Number(saved.width) || doc.width), height: round16(Number(saved.height) || doc.height),
             openpose: saved.openpose || null,
         };
+        characters = (saved.characters || [{ slot: 1, ...doc }]).map(c => ({ ...structuredClone(doc), ...c,
+            mesh: { ...DEFAULT_MESH, ...c.mesh }, proportions: { ...DEFAULT_PROPORTIONS, ...c.proportions },
+            transform: { ...NEUTRAL_TRANSFORM, ...c.transform }, width: doc.width, height: doc.height }));
+        activeSlot = characters.some(c => c.slot === saved.activeSlot) ? saved.activeSlot : characters[0].slot;
+        doc = structuredClone(characters.find(c => c.slot === activeSlot));
     }
     extraPrompt = payload.extra_prompt || '';
+    referencePreviews = payload.referencePreviews || [payload.referencePreview];
     $('#extra-prompt').value = extraPrompt;
     if (payload.referencePreview) {
         $('#person-preview').src = payload.referencePreview;
@@ -728,12 +865,23 @@ function applyPayload(payload) {
 let pendingPayload = null;
 async function start(payload) {
     const restored = payload ? applyPayload(payload) : false;
+    viewer.clearPassiveCharacters(); histories.clear();
+    const selected = activeSlot;
+    const selectedDoc = doc;
+    for (const character of characters.filter(c => c.slot !== selected)) {
+        doc = structuredClone(character); loadModel(doc.pose);
+        viewer.upsertPassiveCharacterFromActive(String(character.slot), { pose: savedPose(), color: '#ffffff', transform: doc.transform });
+    }
+    doc = selectedDoc;
     loadModel(doc.pose);
+    activeDuf = doc.dufId || null;
+    viewer.history = []; viewer.future = [];
     setupInteraction();
     ready = true;
     if (restored) updateCamera(true);
     else fitFrame(true);
     refreshFlips();
+    renderCharacters();
     void loadBuiltin();
     void loadLibrary();
     await viewer.waitForCaptureReady();

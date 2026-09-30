@@ -56,3 +56,8 @@
 @media(max-width:760px){.fp-left{display:block}.fp-left section:first-child{display:block}.fp-left section{margin-bottom:20px}}
 
 #duf-library[hidden], #openpose-library[hidden], #duf-status[hidden] { display: none !important; }
+.fp-character { display:flex; gap:5px; margin:7px 0; }
+.fp-character button:first-child { flex:1; text-align:left; font-size:12px; }
+.fp-character button.active { color:#244ad3; border-color:#5975ff; background:#eef2ff; box-shadow:inset 3px 0 #5975ff; }
+.fp-character button:disabled { opacity:.45; cursor:default; }
+#arrange-characters { width:100%; }
