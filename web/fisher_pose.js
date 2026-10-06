@@ -2,9 +2,9 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 const EDITORS = {
-    studio: { url: new URL("./editor/studio.html", import.meta.url), version: "20260930-characters1", title: "Fisher 3D 机位与姿态编辑器",
+    studio: { url: new URL("./editor/studio.html", import.meta.url), version: "20261006-livebackground1", title: "Fisher 3D 机位与姿态编辑器",
               fields: ["scene_json", "output_mode", "width", "height", "extra_prompt"], data: "scene_json", image: "reference_image_1" },
-    freePose: { url: new URL("./editor/freepose.html", import.meta.url), version: "20260930-characters1", title: "Fisher Pose 3D 自由姿势编辑器",
+    freePose: { url: new URL("./editor/freepose.html", import.meta.url), version: "20261006-livebackground1", title: "Fisher Pose 3D 自由姿势编辑器",
                 fields: ["pose_json", "extra_prompt"], data: "pose_json", image: "reference_image" },
 };
 const editorFor = node => (node.comfyClass || node.type) === "Fisher3DQwenFreePose" ? EDITORS.freePose : EDITORS.studio;
@@ -54,6 +54,7 @@ async function showPoseImage(node) {
 }
 
 function openEditor(node) {
+    syncFreePoseInputs(node, true);
     activeEditor?.();
     const editor = editorFor(node);
     const overlay = document.createElement("dialog");
@@ -113,13 +114,19 @@ function openEditor(node) {
                 };
             }
             payload.referencePreview=upstreamPreview(node,editor.image);
-            if (editor === EDITORS.freePose) payload.referencePreviews = Array.from({length: 5}, (_, i) => upstreamPreview(node, i ? `reference_image_${i + 1}` : 'reference_image'));
+            if (editor === EDITORS.freePose) payload.referencePreviews = Array.from({length: 3}, (_, i) => upstreamPreview(node, i ? `reference_image_${i + 1}` : 'reference_image'));
+            if (editor === EDITORS.freePose) payload.backgroundPreview = upstreamPreview(node, "background_image");
             frame.contentWindow.postMessage({ type: "fisher-3d-load", payload }, location.origin);
         }
         if (event.data?.type === "fisher-3d-close") close();
         if (event.data?.type === "fisher-3d-apply") {
             const payload = event.data.payload;
             if (!payload || typeof payload[editor.data] !== "string") return;
+            if (editor === EDITORS.freePose && payload.resetInputs === true) {
+                for (const name of ['width','height','reference_resolution']) {
+                    const item=widget(node,name); if(item){item.value=1024;item.callback?.(1024);}
+                }
+            }
             for (const name of editor.fields) {
                 const item = widget(node, name);
                 item.value = payload[name];
@@ -141,8 +148,28 @@ function openEditor(node) {
 const EDITABLE_NODE_IDS = new Set(["Fisher3DPoseStudio", "Fisher3DQwenPose", "Fisher3DQwenFreePose"]);
 const editorButton = Symbol("fisher3DEditorButton");
 
+// Stable backend names preserve workflow links and encoder arguments.
+const FREE_POSE_INPUT_LABELS = {
+    reference_image: "参考图1", reference_image_2: "参考图2",
+    reference_image_3: "参考图3", background_image: "参考图4 背景",
+};
+function syncFreePoseInputs(node, removeLegacy = false) {
+    if ((node.comfyClass || node.type) !== "Fisher3DQwenFreePose") return;
+    if (removeLegacy && node.removeInput) {
+        // LiteGraph removes the retired links and updates the remaining target slots.
+        for (let i = (node.inputs?.length || 0) - 1; i >= 0; i--) {
+            if (["reference_image_4", "reference_image_5"].includes(node.inputs[i].name)) node.removeInput(i);
+        }
+    }
+    for (const input of node.inputs || []) {
+        if (FREE_POSE_INPUT_LABELS[input.name]) input.label = FREE_POSE_INPUT_LABELS[input.name];
+    }
+    node.setDirtyCanvas?.(true, true);
+}
+
 function ensureEditorButton(node, name) {
     if (!EDITABLE_NODE_IDS.has(name)) return;
+    syncFreePoseInputs(node);
     const freePose = name === "Fisher3DQwenFreePose";
     const scene = node.widgets?.find(item => item.name === (freePose ? "pose_json" : "scene_json"));
     // Some frontend versions construct serialized widgets after onNodeCreated.
@@ -185,6 +212,7 @@ app.registerExtension({
         ensureEditorButton(node, node.comfyClass || node.type);
     },
     loadedGraphNode(node) {
+        syncFreePoseInputs(node, true);
         ensureEditorButton(node, node.comfyClass || node.type);
     },
 });

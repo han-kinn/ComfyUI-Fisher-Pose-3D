@@ -57,7 +57,7 @@ test('free-pose button opens its own 3D editor iframe',async()=>{
       addWidget(type,name,value,callback){const w={type,name,callback};this.widgets.push(w);return w;}};
     ext.nodeCreated(node);
     node.widgets.find(w=>w.type==='button').callback();
-    assert.match(elements.find(e=>e.tag==='iframe').src,/editor\/freepose\.html\?embedded=1&v=20260930-characters1$/);
+    assert.match(elements.find(e=>e.tag==='iframe').src,/editor\/freepose\.html\?embedded=1&v=20261006-livebackground1$/);
     assert.equal(elements.find(e=>e.tag==='dialog').open,true);
 });
 
@@ -88,4 +88,37 @@ test('file input cancel cannot close its parent editor dialog',()=>{
  assert.equal(stopped,true);assert.equal(picker.removed,true);assert.equal(dialog.open,true);
  dialog.listeners.cancel({target:dialog,preventDefault(){}});
  assert.equal(dialog.open,false);
+});
+
+
+test('old free-pose nodes drop retired inputs and preserve remaining names and links', () => {
+    const ext = extension();
+    const names = ['clip','reference_image','reference_image_4','reference_image_2','reference_image_5','reference_image_3','background_image'];
+    const node = {type:'Fisher3DQwenFreePose',widgets:[],inputs:names.map((name,i)=>({name,link:100+i})),removed:[],
+        removeInput(i){this.removed.push(this.inputs[i].name);this.inputs.splice(i,1);},
+        addWidget(type,name){const w={type,name};this.widgets.push(w);return w;}};
+    ext.loadedGraphNode(node);ext.loadedGraphNode(node);
+    assert.deepEqual(node.inputs.map(i=>i.name), ['clip','reference_image','reference_image_2','reference_image_3','background_image']);
+    assert.deepEqual(node.inputs.map(i=>i.link), [100,101,103,105,106]);
+    assert.deepEqual(node.inputs.slice(1).map(i=>i.label), ['参考图1','参考图2','参考图3','参考图4 背景']);
+    assert.deepEqual(node.removed, ['reference_image_5','reference_image_4']);
+    const original={...node,type:'FisherQwenFreePose',inputs:[{name:'reference_image_4',link:77}],removed:[]};
+    ext.loadedGraphNode(original);
+    assert.equal(original.inputs.length,1);assert.equal(original.inputs[0].link,77);
+});
+
+test('applying reset preserves every input link and prompt while restoring dimensions',()=>{
+ const elements=[];let receive;
+ const document={activeElement:null,body:{append(){}},createElement(tag){const e={tag,style:{},contentWindow:{},append(){},addEventListener(){},showModal(){},close(){},remove(){}};elements.push(e);return e;}};
+ let ext;
+ const app={registerExtension(x){ext=x;},graph:{change(){}}};
+ extension({app,document,window:{addEventListener(type,fn){receive=fn;},removeEventListener(){}},location:{origin:'http://localhost'}});
+ const node={type:'Fisher3DQwenFreePose',widgets:['pose_json','extra_prompt','width','height','reference_resolution'].map(name=>({name,value:512})),
+ inputs:['clip','vae','reference_image','reference_image_2','reference_image_3','background_image','width','height'].map((name,i)=>({name,link:i+10})),
+ disconnectInput(i){this.inputs[i].link=null;},setDirtyCanvas(){},addWidget(type,name,value,callback){const w={type,name,callback};this.widgets.push(w);return w;}};
+ ext.nodeCreated(node);node.widgets.find(w=>w.type==='button').callback();
+ receive({origin:'http://localhost',source:elements.find(e=>e.tag==='iframe').contentWindow,data:{type:'fisher-3d-apply',payload:{pose_json:'{}',extra_prompt:'keep the outfit, soft studio light',resetInputs:true}}});
+ assert.deepEqual(node.inputs.map(i=>i.link),[10,11,12,13,14,15,16,17]);
+ assert.equal(node.widgets.find(w=>w.name==='extra_prompt').value,'keep the outfit, soft studio light');
+ for(const name of ['width','height','reference_resolution'])assert.equal(node.widgets.find(w=>w.name===name).value,1024);
 });

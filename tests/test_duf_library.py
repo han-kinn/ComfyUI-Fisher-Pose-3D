@@ -14,6 +14,28 @@ def sample(value=42):
     return json.dumps({"scene": {"animations": [{"url": "name://@selection/lShldrBend:?rotation/y/value", "keys": [[1, 50], [0, value]]}]}}).encode()
 
 class DufTests(unittest.TestCase):
+    def test_translations_are_preserved(self):
+        data=json.loads(sample())
+        data['scene']['animations'].append({'url':'name://@selection/hip:?translation/x/value','keys':[[0,125]]})
+        self.assertEqual(duf.read_duf(json.dumps(data).encode())['translations']['hip']['x'],125)
+
+    def test_saved_scene_roundtrip(self):
+        with tempfile.TemporaryDirectory() as root:
+            lib=duf.DufLibrary(root)
+            scene={'kind':'vnccs-free-pose','characters':[{'slot':1,'pose':{'bones':{}},'transform':{'x':3}},{'slot':3,'pose':{'bones':{}}}]}
+            entry=lib.save_scene({'name':'pair','presetType':'scene','scene':scene})
+            self.assertEqual(lib.get(entry['id'])['scene'],scene)
+            self.assertEqual(lib.listing()[0]['name'],'pair')
+            with self.assertRaises(ValueError):lib.save_scene({'presetType':'character','scene':scene})
+
+    def test_invalid_scene_does_not_create_library_entry(self):
+        with tempfile.TemporaryDirectory() as root:
+            lib=duf.DufLibrary(root)
+            scene={'kind':'vnccs-free-pose','characters':[{'slot':1}]}
+            with self.assertRaises(ValueError):
+                lib.save_scene({'presetType':'scene','scene':scene,'thumbnail':'invalid'})
+            with self.assertRaises(ValueError):lib.save_scene([])
+            self.assertEqual(lib.listing(), [])
     def test_plain_gzip_and_frame(self):
         for raw in [sample(), gzip.compress(sample()), b"\xef\xbb\xbf" + sample()]:
             self.assertEqual(duf.read_duf(raw)["channels"]["lShldrBend"]["y"], 42)

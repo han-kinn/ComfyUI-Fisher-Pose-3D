@@ -14,7 +14,7 @@ spec = importlib.util.spec_from_file_location("fisher_test", ROOT / "__init__.py
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
-from fisher_test.free_pose import FisherQwenFreePose, free_pose_prompt
+from fisher_test.free_pose import FisherQwenFreePose, free_pose_prompt, identity_reference
 
 
 class RecordingClip:
@@ -74,23 +74,70 @@ class FreePoseTests(unittest.TestCase):
     def test_extra_prompt_follows_instruction(self):
         self.assertEqual(free_pose_prompt('  red dress \n\n studio light '), 'Draw character from image2\nred dress\nstudio light')
 
-    def test_five_references_and_stable_sparse_slots(self):
-        for slots in ([1, 2, 3, 4, 5], [2, 5]):
+    def test_three_references_and_stable_sparse_slots(self):
+        for slots in ([1, 2, 3], [2, 3], [2, 3, 1], [3, 1, 2]):
             saved = json.loads(pose_json())
             saved['characters'] = [{'slot': slot} for slot in slots]
-            refs = {f'reference_image_{slot}': torch.full((1, 32, 32, 3), slot / 10) for slot in range(2, 6)}
+            saved['roleAnchors'] = {'2':[0.5,0.8], '3':[0.8,0.5]}
+            refs = {f'reference_image_{slot}': torch.full((1, 32, 32, 3), slot / 10) for slot in range(2, 4)}
             args = self.args(pose_json=json.dumps(saved), **refs)
             if 1 not in slots: args['reference_image'] = None
             result = FisherQwenFreePose().encode(**args)['result']
             images = args['clip'].calls[0][1]['images']
+            self.assertIn('(50%, 80%)', result[3])
+            self.assertIn('(80%, 50%)', result[3])
             self.assertEqual(len(images), 1 + len(slots))
-            for index, slot in enumerate(slots, 2):
+            for index, slot in enumerate(sorted(slots), 2):
                 self.assertIn(f'labeled {slot} in <image1> with the character from <image{index}>', result[3])
-                self.assertAlmostEqual(float(images[index - 1].mean()), .2 if slot == 1 else slot / 10, delta=1 / 255)
+                self.assertAlmostEqual(float(images[index - 1][:, -16:].mean()), .2 if slot == 1 else slot / 10, delta=0.02)
+
+    def test_identity_banner_preserves_photo_pixels_and_slot_color(self):
+        for channels in (3,4):
+            image=torch.rand(1,96,72,channels)
+            original=image.clone()
+            for slot in (1,2,3):
+                tagged=identity_reference(image,slot)
+                self.assertTrue(torch.equal(tagged[:,-96:],original))
+                self.assertTrue(torch.equal(image,original))
+                self.assertEqual(tagged.shape[-1],channels)
+            self.assertFalse(torch.equal(identity_reference(image,2)[:,:48],identity_reference(image,3)[:,:48]))
+
+    def test_color_badges_only_for_new_saved_guides(self):
+        for version in (None, 1, 2):
+            saved = json.loads(pose_json())
+            saved['characters'] = [{'slot': 2}, {'slot': 3}]
+            if version: saved['roleColorBadges'] = version
+            args = self.args(pose_json=json.dumps(saved), reference_image=None,
+                             reference_image_2=torch.zeros(1,32,32,3),
+                             reference_image_3=torch.zeros(1,32,32,3))
+            prompt = FisherQwenFreePose().encode(**args)['result'][3]
+            self.assertEqual('green badge identifies' in prompt, version == 1)
+            self.assertEqual('purple badge identifies' in prompt, version == 1)
+            self.assertEqual('green mannequin and matching badge' in prompt, version == 2)
+            self.assertEqual('purple mannequin and matching badge' in prompt, version == 2)
+            self.assertIn('Use appearance and clothing colors from the reference photos', prompt)
+
+    def test_background_is_last_reference_and_has_separate_instruction(self):
+        for slots in ([1], [2, 3]):
+            saved = json.loads(pose_json()); saved['characters'] = [{'slot': x} for x in slots]
+            args = self.args(pose_json=json.dumps(saved),
+                reference_image_2=torch.zeros(1,32,32,3), reference_image_3=torch.zeros(1,32,32,3),
+                background_image=torch.full((1,32,32,3), 0.8))
+            result = FisherQwenFreePose().encode(**args)['result']
+            self.assertIn(f'Use <image{len(slots)+2}> as the background environment', result[3])
+            images = args['clip'].calls[0][1]['images']
+            self.assertEqual(len(images), len(slots)+2)
+            self.assertAlmostEqual(float(images[-1].mean()), .8, delta=1/255)
+        inputs = FisherQwenFreePose.INPUT_TYPES()['optional']
+        self.assertEqual(set(inputs), {'reference_image','reference_image_2','reference_image_3','background_image'})
+        for invalid in (torch.zeros(2,32,32,3), torch.zeros(32,32,3)):
+            with self.assertRaises(ValueError):
+                FisherQwenFreePose().encode(**self.args(background_image=invalid))
 
     def test_missing_role_reference_and_duplicate_slots_fail(self):
-        for slots in ([1, 3], [1, 1], [6], []):
+        for slots in ([1, 3], [1, 1], [4], [5], [6], []):
             saved = json.loads(pose_json()); saved['characters'] = [{'slot': slot} for slot in slots]
+            saved['roleAnchors'] = {'2':[0.5,0.8], '3':[0.8,0.5]}
             args = self.args(pose_json=json.dumps(saved))
             with self.assertRaises(ValueError): FisherQwenFreePose().encode(**args)
             self.assertEqual(args['clip'].calls, [])

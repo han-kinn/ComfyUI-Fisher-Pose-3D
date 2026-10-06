@@ -5,8 +5,11 @@ export function retargetDuf(data, viewer) {
     const channels = Object.fromEntries(Object.entries(data.channels || {}).map(([k,v]) => [k.replace('Forearmtwist', 'forearmtwist'),v])), metadata = data.metadata || {};
     let asset = data.asset || '';
     try { asset = decodeURIComponent(asset); } catch { /* Some presets use literal percent signs. */ }
-    const genesis9 = /Genesis ?9|G9[BFM_]/i.test(asset) || Object.keys(channels).some(k => /^(spine[1-4]|[lr]_(upperarm|thigh|forearm|hand|shin|foot|toes|thumb|index|mid|ring|pinky))/.test(k));
-    const genesis8 = /(?:Genesis ?8|(?:^|[/_])V8(?:[_.]|$)|G8(?:\.1)?[FM_])/i.test(asset);
+    const bendTwist = Object.keys(channels).some(k => /^(l|r)(ShldrBend|ThighBend|ForearmBend)$/.test(k));
+    const genesis9 = (!bendTwist && /Genesis ?9|G9[BFM_]/i.test(asset)) || Object.keys(channels).some(k => /^(spine[1-4]|[lr]_(upperarm|thigh|forearm|hand|shin|foot|toes|thumb|index|mid|ring|pinky))/.test(k));
+    const explicitG3 = /Genesis ?3|G3[FM_]/i.test(asset);
+    const inferredG8 = !explicitG3 && !genesis9 && bendTwist;
+    const genesis8 = /(?:Genesis ?8|(?:^|[/_])V8(?:[_.]|$)|G8(?:\.1)?[FM_])/i.test(asset) || inferredG8;
     const parents = {}, mapping = {}, order = {}, source = {};
     const define = (name, parent, target, rotationOrder = 'YZX') => {
         parents[name] = parent; order[name] = rotationOrder;
@@ -91,7 +94,8 @@ export function retargetDuf(data, viewer) {
     const recognized = Object.keys(channels).filter(k => Object.hasOwn(parents, k));
     if (!recognized.length) throw new Error('未识别到 Genesis 人体骨骼；请使用 Genesis 3、8、8.1、9 或传统 DAZ 人体姿势预设');
     const vec = entries => ['x','y','z'].map(axis => Number(entries?.find(e => e.id === axis)?.value || 0));
-    const quaternion = (angles, sequence) => new T.Quaternion().setFromEuler(new T.Euler(...angles.map(v => v * rad), sequence));
+    // DSON lists successive fixed-axis rotations; THREE uses intrinsic Euler order.
+    const quaternion = (angles, sequence) => new T.Quaternion().setFromEuler(new T.Euler(...angles.map(v => v * rad), [...sequence].reverse().join('')));
     function world(name) {
         if (!name) return new T.Quaternion();
         if (source[name]) return source[name].clone();
@@ -132,6 +136,20 @@ export function retargetDuf(data, viewer) {
         bones[bone.name] = angles;
     }
     const ignored = Object.keys(channels).filter(k => !Object.hasOwn(parents, k));
-    return { pose: { bones, modelRotation: [0, 0, 0] }, count: recognized.length,
-        warning: `${Object.keys(metadata).length ? '已读取文件骨骼定义' : '采用 Genesis 默认骨架近似转移（预设未包含骨架定义）'}${ignored.length ? `；未映射 ${ignored.length} 个骨骼（如眼睛/面部）` : ''}` };
+    // DSON is centimetres, MakeHuman is decimetres; both are right-handed Y-up.
+    const xyz = value => ['x', 'y', 'z'].map(axis => Number(value?.[axis] || 0));
+    const translationVector = new T.Vector3(...xyz(data.translations?.hip))
+        .applyQuaternion(world('__figure__')).add(new T.Vector3(...xyz(data.translations?.__figure__))).multiplyScalar(0.1);
+    // DAZ hip rotates about the pelvis; the target Root is at the feet.
+    // Change the rotation pivot analytically, using the target's rest skeleton,
+    // rather than fitting one pair of poses with an empirical displacement.
+    const root = viewer.boneList.find(b => b.name === 'Root');
+    const pelvis = viewer.boneList.find(b => b.name === 'pelvis');
+    if (root?.userData.headPos && pelvis?.userData.headPos) {
+        const offset = new T.Vector3(...pelvis.userData.headPos).sub(new T.Vector3(...root.userData.headPos));
+        translationVector.add(offset.clone().applyQuaternion(world('__figure__')).sub(offset.clone().applyQuaternion(world('hip'))));
+    }
+    const translation = translationVector.toArray();
+    return { pose: { bones, modelRotation: [0, 0, 0] }, translation, count: recognized.length,
+        warning: `${Object.keys(metadata).length ? '已读取文件骨骼定义' : `采用 ${genesis9?'G9':genesis8?'G8/8.1 A姿':'G3/传统 T姿'} 骨架近似转移（预设未包含骨架定义）`}${ignored.length ? `；未映射 ${ignored.length} 个骨骼（如眼睛/面部）` : ''}` };
 }

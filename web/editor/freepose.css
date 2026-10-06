@@ -56,8 +56,32 @@
 @media(max-width:760px){.fp-left{display:block}.fp-left section:first-child{display:block}.fp-left section{margin-bottom:20px}}
 
 #duf-library[hidden], #openpose-library[hidden], #duf-status[hidden] { display: none !important; }
-.fp-character { display:flex; gap:5px; margin:7px 0; }
-.fp-character button:first-child { flex:1; text-align:left; font-size:12px; }
+#character-list { display:flex; gap:6px; margin:10px 0 15px; }
+.fp-character { position:relative; flex:1; min-width:0; }
+.fp-character button:first-child { width:100%; padding:10px 0; font-size:12px; }
+.fp-character .fp-character-delete { position:absolute; top:-7px; right:-3px; width:17px; height:17px; padding:0; border-radius:50%; border:0; background:#db394a; color:white; font-size:14px; line-height:17px; }
 .fp-character button.active { color:#244ad3; border-color:#5975ff; background:#eef2ff; box-shadow:inset 3px 0 #5975ff; }
 .fp-character button:disabled { opacity:.45; cursor:default; }
 #arrange-characters { width:100%; }
+.fp-scene-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.fp-scene-actions button { padding:7px 3px; font-size:12px; }
+.fp-position-option { display:flex; align-items:center; gap:5px; margin:8px 0; font-size:12px; }
+.fp-view-tools { position:absolute; top:60px; right:18px; z-index:4; display:flex; align-items:center; flex-direction:column; gap:5px; }
+#view-ball { position:static; width:90px; height:90px; cursor:grab; touch-action:none; }
+#bake-view { font-size:11px; padding:6px; background:#ffffffdd; }
+.fp-dialog { width:min(360px,85vw); border:1px solid #dce3ed; border-radius:12px; padding:22px; color:#263347; box-shadow:0 12px 48px #0003; }
+.fp-dialog::backdrop { background:#101a3366; }
+.fp-dialog label { display:block; white-space:pre-line; line-height:1.6; }
+.fp-dialog input { display:block; box-sizing:border-box; width:100%; margin:14px 0; padding:10px; border:1px solid #bac8dd; border-radius:6px; }
+.fp-dialog form>div { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+.fp-scene-actions button[aria-pressed=true] { color:#244ad3; border-color:#5975ff; background:#eef2ff; box-shadow:inset 3px 0 #5975ff; }
+
+#person-preview-wrap[hidden] { display: none !important; }
+
+.description-section[hidden] { display:none !important; }
+
+/* Match the adjacent slider labels and numeric readouts. */
+.right-panel .dimensions label,.fp-background-option{font-family:inherit;font-size:11px;font-weight:400;line-height:1.5;color:inherit}
+.right-panel .dimensions input{font-family:inherit;font-size:12px;font-weight:400}
+.fp-background-option{display:flex;align-items:center;gap:7px;cursor:pointer}
+.fp-background-option input{margin:0;accent-color:#4c6dde}
